@@ -6,6 +6,9 @@
     <title>Finanz-Tracker</title>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Work+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <style>
         :root {
             --bg-primary: #0f1419;
@@ -246,12 +249,8 @@
             font-weight: 600;
             font-family: 'Playfair Display', serif;
         }
-        .summary-value.positive {
-            color: var(--accent-emerald);
-        }
-        .summary-value.negative {
-            color: var(--accent-ruby);
-        }
+        .summary-value.positive { color: var(--accent-emerald); }
+        .summary-value.negative { color: var(--accent-ruby); }
         .history-section {
             background: var(--bg-card);
             border-radius: 20px;
@@ -267,9 +266,7 @@
             border-spacing: 0;
             margin-top: 1.5rem;
         }
-        .history-table thead {
-            background: var(--bg-secondary);
-        }
+        .history-table thead { background: var(--bg-secondary); }
         .history-table th {
             padding: 1rem;
             text-align: left;
@@ -281,7 +278,7 @@
             border-bottom: 2px solid var(--border);
         }
         .history-table th:first-child { border-radius: 10px 0 0 0; }
-        .history-table th:last-child { border-radius: 0 10px 0 0; }
+        .history-table th:last-child  { border-radius: 0 10px 0 0; }
         .history-table td {
             padding: 1rem;
             border-bottom: 1px solid var(--border);
@@ -312,10 +309,7 @@
         .modal {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.8);
             backdrop-filter: blur(8px);
             z-index: 1000;
@@ -369,8 +363,7 @@
             user-select: none;
         }
         .chart-checkbox input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
+            width: 18px; height: 18px;
             cursor: pointer;
             accent-color: var(--accent-gold);
         }
@@ -397,40 +390,36 @@
             padding: 3rem;
             color: var(--text-secondary);
         }
-        .empty-state-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            opacity: 0.5;
+        .empty-state-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+        .status-dot {
+            display: inline-block;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+            background: var(--text-secondary);
         }
-        .signin-prompt {
-            text-align: center;
-            padding: 4rem 2rem;
-            color: var(--text-secondary);
-        }
-        .signin-prompt-icon {
-            font-size: 4rem;
-            margin-bottom: 1.5rem;
-            opacity: 0.4;
-        }
-        .signin-prompt p {
-            font-size: 1.1rem;
-            margin-bottom: 1.5rem;
+        .status-dot.connected  { background: var(--accent-emerald); }
+        .status-dot.error      { background: var(--accent-ruby); }
+        .status-dot.connecting { background: var(--accent-gold); animation: pulse 1.2s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.3; }
         }
         @keyframes fadeIn {
             from { opacity: 0; }
-            to { opacity: 1; }
+            to   { opacity: 1; }
         }
         @keyframes fadeInDown {
             from { opacity: 0; transform: translateY(-30px); }
-            to { opacity: 1; transform: translateY(0); }
+            to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
+            to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes scaleIn {
             from { opacity: 0; transform: scale(0.9); }
-            to { opacity: 1; transform: scale(1); }
+            to   { opacity: 1; transform: scale(1); }
         }
         @media (max-width: 768px) {
             h1 { font-size: 2.5rem; }
@@ -446,17 +435,16 @@
         </header>
 
         <div class="controls">
-            <button class="btn btn-primary" id="authBtn" onclick="signIn()">Mit Google anmelden</button>
-            <!-- shown only when signed in -->
-            <div id="dataControls" style="display: none; gap: 1rem; flex-wrap: wrap;">
-                <button class="btn btn-secondary" onclick="showAddEntryModal()">+ Neuer Eintrag</button>
-                <button class="btn btn-secondary" onclick="showCompareModal()">Vergleichen</button>
-                <button class="btn btn-secondary" onclick="exportData()">Export CSV</button>
-            </div>
+            <button class="btn btn-primary" onclick="showAddEntryModal()">+ Neuer Eintrag</button>
+            <button class="btn btn-secondary" onclick="showCompareModal()">Vergleichen</button>
+            <button class="btn btn-secondary" onclick="exportData()">Export CSV</button>
         </div>
 
         <div style="text-align: center; font-size: 0.9rem; margin-bottom: 1rem;">
-            <span id="saveStatus" style="color: var(--text-secondary);">Nicht angemeldet</span>
+            <span id="saveStatus" style="color: var(--text-secondary);">
+                <span class="status-dot connecting" id="statusDot"></span>
+                <span id="statusText">Verbinde mit Firebase...</span>
+            </span>
         </div>
 
         <div class="summary-grid">
@@ -576,7 +564,7 @@
         </div>
     </div>
 
-    <!-- Modal: Neuer Eintrag / Bearbeiten -->
+    <!-- Modal: Neuer Eintrag -->
     <div class="modal" id="addEntryModal">
         <div class="modal-content">
             <h2 class="section-title" id="modalTitle">Neuer Eintrag</h2>
@@ -661,7 +649,7 @@
                     </div>
                 </div>
                 <div style="margin-top: 2rem; display: flex; gap: 1rem;">
-                    <button class="btn btn-primary" id="modalSaveBtn" onclick="saveEntry()" style="flex: 1;">Speichern</button>
+                    <button class="btn btn-primary" id="saveEntryBtn" onclick="saveEntry()" style="flex: 1;">Speichern</button>
                     <button class="btn btn-secondary" onclick="closeModal('addEntryModal')">Abbrechen</button>
                 </div>
             </div>
@@ -694,282 +682,200 @@
         </div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-        import { getFirestore, doc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-
-        // ── Firebase config ── replace with your project's values after setup ──
+    <script>
+        // ============================================================
+        // FIREBASE CONFIGURATION
+        // Replace the placeholder values below with your own config.
+        // See the Firebase setup instructions provided with this file.
+        // ============================================================
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT_ID.appspot.com",
-            messagingSenderId: "YOUR_SENDER_ID",
-            appId: "YOUR_APP_ID"
+            apiKey:            "YOUR_API_KEY",
+            authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId:         "YOUR_PROJECT_ID",
+            storageBucket:     "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId:             "YOUR_APP_ID"
         };
-        // ─────────────────────────────────────────────────────────────────────
+        // ============================================================
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        const googleProvider = new GoogleAuthProvider();
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const entriesCol = db.collection('entries');
 
-        // ── State ──
+        // Local cache kept in sync by onSnapshot
         let entries = [];
-        let unsubscribeSnapshot = null;
+        let currentEditingEntryId = null;
         let showBankDetails = false;
-        const PREFS_KEY = 'finanz_chart_preferences';
+        let wealthChart = null;
+        const PREFS_KEY = 'chart_preferences';
 
         const accounts = [
             { id: 'mlp_konto',     label: 'MLP Konto',               type: 'konto' },
-            { id: 'mlp_depot',     label: 'MLP Depot',                type: 'depot' },
-            { id: 'consors_konto', label: 'Consors Konto',            type: 'konto' },
-            { id: 'consors_depot', label: 'Consors Depot',            type: 'depot' },
-            { id: 'tr_konto',      label: 'Trade Republic Konto',     type: 'konto' },
-            { id: 'tr_depot',      label: 'Trade Republic Depot',     type: 'depot' },
-            { id: 'vb_konto',      label: 'Volksbank Konto',          type: 'konto' },
-            { id: 'vb_depot',      label: 'Volksbank Depot',          type: 'depot' },
-            { id: 'ui_depot',      label: 'Union Investment Depot',   type: 'depot' },
-            { id: 'adidas_konto',  label: 'adidas Konto',             type: 'konto' },
-            { id: 'adidas_depot',  label: 'adidas Depot',             type: 'depot' },
-            { id: 'adidas_lta',    label: 'adidas LTA',               type: 'lta'   },
-            { id: 'coba_depot',    label: 'Commerzbank Depot',        type: 'depot' }
+            { id: 'mlp_depot',     label: 'MLP Depot',               type: 'depot' },
+            { id: 'consors_konto', label: 'Consors Konto',           type: 'konto' },
+            { id: 'consors_depot', label: 'Consors Depot',           type: 'depot' },
+            { id: 'tr_konto',      label: 'Trade Republic Konto',    type: 'konto' },
+            { id: 'tr_depot',      label: 'Trade Republic Depot',    type: 'depot' },
+            { id: 'vb_konto',      label: 'Volksbank Konto',         type: 'konto' },
+            { id: 'vb_depot',      label: 'Volksbank Depot',         type: 'depot' },
+            { id: 'ui_depot',      label: 'Union Investment Depot',  type: 'depot' },
+            { id: 'adidas_konto',  label: 'adidas Konto',            type: 'konto' },
+            { id: 'adidas_depot',  label: 'adidas Depot',            type: 'depot' },
+            { id: 'adidas_lta',    label: 'adidas LTA',              type: 'lta'   },
+            { id: 'coba_depot',    label: 'Commerzbank Depot',       type: 'depot' }
         ];
 
-        // ── Expose to global scope for inline onclick handlers ──
-        window.signIn       = signIn;
-        window.doSignOut    = doSignOut;
-        window.showAddEntryModal  = showAddEntryModal;
-        window.saveEntry          = saveEntry;
-        window.deleteEntry        = deleteEntry;
-        window.showEntryDetails   = showEntryDetails;
-        window.closeModal         = closeModal;
-        window.showCompareModal   = showCompareModal;
-        window.performComparison  = performComparison;
-        window.updateChartDisplay = updateChartDisplay;
-        window.toggleBankDetails  = toggleBankDetails;
-        window.exportData         = exportData;
-
-        // ── Auth ──
-        async function signIn() {
-            try {
-                await signInWithPopup(auth, googleProvider);
-            } catch (error) {
-                alert('Anmeldung fehlgeschlagen: ' + error.message);
-            }
-        }
-
-        async function doSignOut() {
-            if (unsubscribeSnapshot) {
-                unsubscribeSnapshot();
-                unsubscribeSnapshot = null;
-            }
-            await signOut(auth);
-            entries = [];
-            refreshDisplay();
-        }
-
-        function updateAuthUI(user) {
-            const authBtn      = document.getElementById('authBtn');
-            const dataControls = document.getElementById('dataControls');
-            const statusEl     = document.getElementById('saveStatus');
-
-            if (user) {
-                authBtn.textContent = 'Abmelden (' + user.displayName + ')';
-                authBtn.onclick = doSignOut;
-                authBtn.className = 'btn btn-secondary';
-                statusEl.textContent = '✓ Verbunden · ' + user.email;
-                statusEl.style.color = 'var(--accent-emerald)';
-                dataControls.style.display = 'flex';
-            } else {
-                authBtn.textContent = 'Mit Google anmelden';
-                authBtn.onclick = signIn;
-                authBtn.className = 'btn btn-primary';
-                statusEl.textContent = 'Nicht angemeldet';
-                statusEl.style.color = 'var(--text-secondary)';
-                dataControls.style.display = 'none';
-            }
-        }
-
-        // ── Firestore ──
-        function startFirestoreListener() {
-            const entriesRef = doc(db, 'finanz', 'entries');
-            unsubscribeSnapshot = onSnapshot(entriesRef, (docSnap) => {
-                entries = docSnap.exists() ? (docSnap.data().data || []) : [];
-                refreshDisplay();
-            }, (error) => {
-                console.error('Firestore error:', error);
-                document.getElementById('saveStatus').textContent = '⚠ Verbindungsfehler';
-                document.getElementById('saveStatus').style.color = 'var(--accent-ruby)';
-            });
-        }
-
-        async function saveToFirestore() {
-            try {
-                await setDoc(doc(db, 'finanz', 'entries'), { data: entries });
-            } catch (error) {
-                alert('Fehler beim Speichern: ' + error.message);
-            }
-        }
-
-        onAuthStateChanged(auth, (user) => {
-            updateAuthUI(user);
-            if (user) {
-                startFirestoreListener();
-            } else {
-                if (unsubscribeSnapshot) {
-                    unsubscribeSnapshot();
-                    unsubscribeSnapshot = null;
+        // ── Firebase real-time listener ───────────────────────────────
+        function initFirebase() {
+            setStatus('connecting');
+            entriesCol.orderBy('date', 'desc').onSnapshot(
+                (snapshot) => {
+                    entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    setStatus('connected');
+                    refreshDisplay();
+                },
+                (error) => {
+                    console.error('Firestore error:', error);
+                    setStatus('error', error.message);
                 }
-                entries = [];
-                refreshDisplay();
-            }
-        });
-
-        // ── Data ──
-        function loadEntries() {
-            return [...entries].sort((a, b) => new Date(b.date) - new Date(a.date));
+            );
         }
 
-        function saveEntry() {
+        function setStatus(state, msg) {
+            const dot  = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            dot.className = 'status-dot ' + state;
+            if (state === 'connected') text.textContent = 'Verbunden mit Firebase ✓';
+            else if (state === 'error')  text.textContent = 'Firebase Fehler: ' + msg;
+            else                          text.textContent = 'Verbinde mit Firebase...';
+        }
+
+        // ── Save / delete ─────────────────────────────────────────────
+        async function saveEntry() {
             const date = document.getElementById('entryDate').value;
             if (!date) { alert('Bitte ein Datum eingeben'); return; }
 
-            if (window.currentEditingEntryId) {
-                const idx = entries.findIndex(e => e.id === window.currentEditingEntryId);
-                if (idx !== -1) {
-                    entries[idx].date = date;
-                    accounts.forEach(acc => {
-                        entries[idx][acc.id] = parseFloat(document.getElementById(acc.id).value) || 0;
-                    });
+            const entryData = { date };
+            accounts.forEach(acc => {
+                entryData[acc.id] = parseFloat(document.getElementById(acc.id).value) || 0;
+            });
+
+            try {
+                if (currentEditingEntryId) {
+                    await entriesCol.doc(currentEditingEntryId).update(entryData);
+                } else {
+                    await entriesCol.add(entryData);
                 }
-                window.currentEditingEntryId = null;
-            } else {
-                const entry = { date, id: Date.now() };
-                accounts.forEach(acc => {
-                    entry[acc.id] = parseFloat(document.getElementById(acc.id).value) || 0;
-                });
-                entries.push(entry);
+                closeModal('addEntryModal');
+                clearInputs();
+            } catch (err) {
+                alert('Fehler beim Speichern: ' + err.message);
             }
-
-            saveToFirestore();
-            closeModal('addEntryModal');
-            clearInputs();
         }
 
-        function deleteEntry(id) {
+        async function deleteEntry(id) {
             if (!confirm('Eintrag wirklich löschen?')) return;
-            entries = entries.filter(e => e.id !== id);
-            saveToFirestore();
+            try {
+                await entriesCol.doc(id).delete();
+            } catch (err) {
+                alert('Fehler beim Löschen: ' + err.message);
+            }
         }
 
-        // ── Display ──
+        // ── Display ───────────────────────────────────────────────────
         function refreshDisplay() {
-            const sorted = loadEntries();
-            updateSummary(sorted);
-            displayHistory(sorted);
-            updateCompareSelects(sorted);
-            renderChart(sorted);
+            updateSummary(entries);
+            displayHistory(entries);
+            updateCompareSelects(entries);
+            renderChart(entries);
         }
 
-        function updateSummary(sorted) {
-            if (sorted.length === 0) {
-                document.getElementById('totalValue').textContent     = '€ 0';
-                document.getElementById('totalAccounts').textContent  = '€ 0';
-                document.getElementById('totalDepots').textContent    = '€ 0';
-                document.getElementById('recentChangeValue').textContent = '-';
-                document.getElementById('totalChangeValue').textContent  = '-';
+        function updateSummary(list) {
+            if (list.length === 0) {
+                ['totalValue','totalAccounts','totalDepots'].forEach(id => {
+                    document.getElementById(id).textContent = '€ 0';
+                });
+                ['recentChangeValue','totalChangeValue'].forEach(id => {
+                    document.getElementById(id).textContent = '-';
+                });
                 return;
             }
-
-            const latest = sorted[0];
+            const latest = list[0];
             let totalKonto = 0, totalDepot = 0, totalLTA = 0;
             accounts.forEach(acc => {
-                const val = latest[acc.id] || 0;
-                if (acc.type === 'konto')     totalKonto += val;
-                else if (acc.type === 'depot') totalDepot += val;
-                else if (acc.type === 'lta')   totalLTA   += val;
+                const v = latest[acc.id] || 0;
+                if (acc.type === 'konto') totalKonto += v;
+                else if (acc.type === 'depot') totalDepot += v;
+                else if (acc.type === 'lta') totalLTA += v;
             });
             const total = totalKonto + totalDepot + totalLTA;
-
             document.getElementById('totalValue').textContent    = formatCurrency(total);
             document.getElementById('totalAccounts').textContent = formatCurrency(totalKonto);
             document.getElementById('totalDepots').textContent   = formatCurrency(totalDepot + totalLTA);
 
-            function renderChange(el, newVal, oldVal) {
+            function setChange(elId, newVal, oldVal) {
+                const el   = document.getElementById(elId);
                 const diff = newVal - oldVal;
                 const pct  = oldVal !== 0 ? (diff / oldVal) * 100 : 0;
-                const sign = diff >= 0 ? '+' : '';
-                el.innerHTML = `${sign}${formatCurrency(diff).replace('€', '€ ')}<br>
-                    <span style="font-size:1.2rem;opacity:0.8;">${sign}${pct.toFixed(2)}%</span>`;
+                const s    = diff >= 0 ? '+' : '';
+                const ps   = pct  >= 0 ? '+' : '';
+                el.innerHTML = `${s}${formatCurrency(diff).replace('€', '€ ')}<br><span style="font-size:1.2rem;opacity:0.8;">${ps}${pct.toFixed(2)}%</span>`;
                 el.className = 'summary-value ' + (diff >= 0 ? 'positive' : 'negative');
             }
 
-            if (sorted.length > 1) {
-                const prevTotal = accounts.reduce((s, a) => s + (sorted[1][a.id] || 0), 0);
-                renderChange(document.getElementById('recentChangeValue'), total, prevTotal);
-                const oldTotal = accounts.reduce((s, a) => s + (sorted[sorted.length - 1][a.id] || 0), 0);
-                renderChange(document.getElementById('totalChangeValue'), total, oldTotal);
+            if (list.length > 1) {
+                const prevTotal = accounts.reduce((s, a) => s + (list[1][a.id] || 0), 0);
+                setChange('recentChangeValue', total, prevTotal);
+                const oldTotal = accounts.reduce((s, a) => s + (list[list.length - 1][a.id] || 0), 0);
+                setChange('totalChangeValue', total, oldTotal);
             } else {
                 document.getElementById('recentChangeValue').textContent = '-';
                 document.getElementById('totalChangeValue').textContent  = '-';
             }
         }
 
-        function displayHistory(sorted) {
+        function displayHistory(list) {
             const container = document.getElementById('historyContent');
-
-            if (sorted.length === 0) {
-                const isSignedIn = auth.currentUser !== null;
-                container.innerHTML = isSignedIn
-                    ? `<div class="empty-state">
-                          <div class="empty-state-icon">📊</div>
-                          <p>Noch keine Einträge vorhanden</p>
-                          <p style="margin-top:0.5rem;font-size:0.9rem;">Klicken Sie auf "+ Neuer Eintrag" um zu beginnen</p>
-                       </div>`
-                    : `<div class="signin-prompt">
-                          <div class="signin-prompt-icon">🔒</div>
-                          <p>Melden Sie sich an, um Ihre Finanzdaten zu sehen</p>
-                          <button class="btn btn-primary" onclick="signIn()">Mit Google anmelden</button>
-                       </div>`;
+            if (list.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📊</div>
+                        <p>Noch keine Einträge vorhanden</p>
+                        <p style="margin-top:0.5rem;font-size:0.9rem;">Klicken Sie auf "Neuer Eintrag" um zu beginnen</p>
+                    </div>`;
                 return;
             }
-
             let html = `
                 <table class="history-table">
-                    <thead>
-                        <tr>
-                            <th>Datum</th>
-                            <th>Gesamt Konten</th>
-                            <th>Gesamt Depots</th>
-                            <th>Gesamtvermögen</th>
-                            <th>Aktionen</th>
-                        </tr>
-                    </thead>
-                    <tbody>`;
+                    <thead><tr>
+                        <th>Datum</th>
+                        <th>Gesamt Konten</th>
+                        <th>Gesamt Depots</th>
+                        <th>Gesamtvermögen</th>
+                        <th>Aktionen</th>
+                    </tr></thead><tbody>`;
 
-            sorted.forEach(entry => {
+            list.forEach(entry => {
                 let totalKonto = 0, totalDepot = 0, totalLTA = 0;
                 accounts.forEach(acc => {
-                    const val = entry[acc.id] || 0;
-                    if (acc.type === 'konto')     totalKonto += val;
-                    else if (acc.type === 'depot') totalDepot += val;
-                    else if (acc.type === 'lta')   totalLTA   += val;
+                    const v = entry[acc.id] || 0;
+                    if (acc.type === 'konto') totalKonto += v;
+                    else if (acc.type === 'depot') totalDepot += v;
+                    else if (acc.type === 'lta') totalLTA += v;
                 });
                 const total = totalKonto + totalDepot + totalLTA;
+                // Use data-id attribute to avoid issues with special characters in IDs
                 html += `
-                    <tr onclick="showEntryDetails(${entry.id})">
+                    <tr data-id="${entry.id}" onclick="showEntryDetails(this.dataset.id)">
                         <td>${formatDate(entry.date)}</td>
                         <td>${formatCurrency(totalKonto)}</td>
                         <td>${formatCurrency(totalDepot + totalLTA)}</td>
                         <td><strong>${formatCurrency(total)}</strong></td>
                         <td onclick="event.stopPropagation()">
-                            <button class="delete-btn" onclick="deleteEntry(${entry.id})">Löschen</button>
+                            <button class="delete-btn" data-id="${entry.id}" onclick="deleteEntry(this.dataset.id)">Löschen</button>
                         </td>
                     </tr>`;
             });
-
             html += '</tbody></table>';
             container.innerHTML = html;
         }
@@ -977,22 +883,20 @@
         function showEntryDetails(entryId) {
             const entry = entries.find(e => e.id === entryId);
             if (!entry) return;
-
-            window.currentEditingEntryId = entryId;
+            currentEditingEntryId = entryId;
             document.getElementById('entryDate').value = entry.date;
             accounts.forEach(acc => {
                 const input = document.getElementById(acc.id);
                 if (input) input.value = entry[acc.id] || '';
             });
-
-            document.getElementById('addEntryModal').classList.add('active');
             document.getElementById('modalTitle').textContent = 'Eintrag bearbeiten – ' + formatDate(entry.date);
-            document.getElementById('modalSaveBtn').textContent = 'Änderungen speichern';
+            document.getElementById('saveEntryBtn').textContent = 'Änderungen speichern';
+            document.getElementById('addEntryModal').classList.add('active');
         }
 
-        function updateCompareSelects(sorted) {
+        function updateCompareSelects(list) {
             let options = '<option value="">Bitte wählen...</option>';
-            sorted.forEach(e => {
+            list.forEach(e => {
                 options += `<option value="${e.id}">${formatDate(e.date)}</option>`;
             });
             document.getElementById('compare1').innerHTML = options;
@@ -1003,15 +907,12 @@
             const id1 = document.getElementById('compare1').value;
             const id2 = document.getElementById('compare2').value;
             if (!id1 || !id2) { alert('Bitte beide Einträge auswählen'); return; }
-
-            const e1 = entries.find(e => e.id == id1);
-            const e2 = entries.find(e => e.id == id2);
+            const e1 = entries.find(e => e.id === id1);
+            const e2 = entries.find(e => e.id === id2);
             if (!e1 || !e2) { alert('Einträge nicht gefunden'); return; }
 
             let html = `<div style="overflow-x:auto;"><table class="history-table">
-                <thead><tr><th>Konto</th><th>${formatDate(e1.date)}</th><th>${formatDate(e2.date)}</th><th>Differenz</th></tr></thead>
-                <tbody>`;
-
+                <thead><tr><th>Konto</th><th>${formatDate(e1.date)}</th><th>${formatDate(e2.date)}</th><th>Differenz</th></tr></thead><tbody>`;
             accounts.forEach(acc => {
                 const v1   = e1[acc.id] || 0;
                 const v2   = e2[acc.id] || 0;
@@ -1023,51 +924,11 @@
                     <td class="${diff >= 0 ? 'positive' : 'negative'}" style="font-weight:600;">${formatCurrency(diff)}</td>
                 </tr>`;
             });
-
             html += '</tbody></table></div>';
             document.getElementById('comparisonResult').innerHTML = html;
         }
 
-        function showAddEntryModal() {
-            window.currentEditingEntryId = null;
-            document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
-            document.getElementById('modalTitle').textContent = 'Neuer Eintrag';
-            document.getElementById('modalSaveBtn').textContent = 'Speichern';
-            clearInputs();
-            document.getElementById('addEntryModal').classList.add('active');
-        }
-
-        function showCompareModal() {
-            document.getElementById('compareModal').classList.add('active');
-            document.getElementById('comparisonResult').innerHTML = '';
-        }
-
-        function closeModal(id) {
-            document.getElementById(id).classList.remove('active');
-        }
-
-        function clearInputs() {
-            accounts.forEach(acc => { document.getElementById(acc.id).value = ''; });
-        }
-
-        function exportData() {
-            const sorted = loadEntries();
-            if (sorted.length === 0) { alert('Keine Daten zum Exportieren'); return; }
-            let csv = 'Datum;' + accounts.map(a => a.label).join(';') + '\n';
-            [...sorted].reverse().forEach(entry => {
-                csv += formatDate(entry.date) + ';';
-                csv += accounts.map(a => (entry[a.id] || 0).toString().replace('.', ',')).join(';');
-                csv += '\n';
-            });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-            link.download = 'finanz-export-' + new Date().toISOString().split('T')[0] + '.csv';
-            link.click();
-        }
-
-        // ── Chart ──
-        let wealthChart = null;
-
+        // ── Chart ─────────────────────────────────────────────────────
         function saveChartPreferences() {
             const ids = ['showTotal','showKonten','showDepots','showMLP_Konto','showMLP_Depot',
                 'showConsors_Konto','showConsors_Depot','showTR_Konto','showTR_Depot',
@@ -1084,18 +945,16 @@
             try {
                 const prefs = JSON.parse(saved);
                 const defaults = { showTotal: true, showKonten: true, showDepots: true };
-                ['showTotal','showKonten','showDepots','showMLP_Konto','showMLP_Depot',
-                 'showConsors_Konto','showConsors_Depot','showTR_Konto','showTR_Depot',
-                 'showVB_Konto','showVB_Depot','showUI_Depot','showAdidas_Konto',
-                 'showAdidas_Depot','showAdidas_LTA','showCoba_Depot'].forEach(id => {
-                    document.getElementById(id).checked = prefs[id] ?? (defaults[id] ?? false);
+                Object.entries(prefs).forEach(([k, v]) => {
+                    const el = document.getElementById(k);
+                    if (el) el.checked = v ?? (defaults[k] ?? false);
                 });
                 showBankDetails = prefs.showBankDetails ?? false;
                 if (showBankDetails) {
                     document.getElementById('bankCheckboxes').style.display = 'block';
                     document.getElementById('bankToggleText').textContent = '- Einzelne Banken';
                 }
-            } catch (e) { console.error('Error loading chart preferences:', e); }
+            } catch (e) { console.error('Error loading preferences:', e); }
         }
 
         function toggleBankDetails() {
@@ -1107,80 +966,78 @@
 
         function updateChartDisplay() {
             saveChartPreferences();
-            renderChart(loadEntries());
+            renderChart(entries);
         }
 
-        function renderChart(sorted) {
+        function renderChart(list) {
             const canvas = document.getElementById('wealthChart');
             const ctx = canvas.getContext('2d');
             if (wealthChart) { wealthChart.destroy(); }
-            if (sorted.length === 0) return;
+            if (list.length === 0) return;
 
-            const chronological = [...sorted].reverse();
-            const labels = chronological.map(e => formatDate(e.date));
+            const sorted = [...list].reverse(); // oldest → newest
+            const labels = sorted.map(e => formatDate(e.date));
             const datasets = [];
 
-            const g = (r, g2, b) => {
+            function makeGradient(r, g, b) {
                 const grad = ctx.createLinearGradient(0, 0, 0, 400);
-                grad.addColorStop(0, `rgba(${r},${g2},${b},0.3)`);
-                grad.addColorStop(1, `rgba(${r},${g2},${b},0.0)`);
+                grad.addColorStop(0, `rgba(${r},${g},${b},0.3)`);
+                grad.addColorStop(1, `rgba(${r},${g},${b},0.0)`);
                 return grad;
-            };
+            }
 
             const checked = id => document.getElementById(id).checked;
-            const sum = (entry, type) => accounts.reduce((s, a) => s + (a.type === type ? (entry[a.id] || 0) : 0), 0);
 
-            if (checked('showTotal')) datasets.push({
-                label: 'Gesamtvermögen',
-                data: chronological.map(e => accounts.reduce((s, a) => s + (e[a.id] || 0), 0)),
-                borderColor: '#d4af37', backgroundColor: g(212,175,55),
-                borderWidth: 3, fill: true, tension: 0.4,
-                pointRadius: 6, pointHoverRadius: 8,
-                pointBackgroundColor: '#d4af37', pointBorderColor: '#0f1419', pointBorderWidth: 2
-            });
+            function line(label, data, color, opts = {}) {
+                return {
+                    label, data,
+                    borderColor: color,
+                    backgroundColor: opts.fill ? makeGradient(...opts.fill) : 'transparent',
+                    borderWidth: opts.width ?? 2,
+                    fill: !!opts.fill,
+                    tension: 0.4,
+                    pointRadius: opts.pointRadius ?? 3,
+                    pointHoverRadius: (opts.pointRadius ?? 3) + 2,
+                    pointBackgroundColor: color,
+                    pointBorderColor: '#0f1419',
+                    pointBorderWidth: 2,
+                    borderDash: opts.dash ?? []
+                };
+            }
 
-            if (checked('showKonten')) datasets.push({
-                label: 'Konten',
-                data: chronological.map(e => sum(e, 'konto')),
-                borderColor: '#2dd4bf', backgroundColor: g(45,212,191),
-                borderWidth: 2, fill: true, tension: 0.4,
-                pointRadius: 4, pointHoverRadius: 6,
-                pointBackgroundColor: '#2dd4bf', pointBorderColor: '#0f1419', pointBorderWidth: 2
-            });
+            if (checked('showTotal'))
+                datasets.push(line('Gesamtvermögen',
+                    sorted.map(e => accounts.reduce((s, a) => s + (e[a.id] || 0), 0)),
+                    '#d4af37', { fill: [212, 175, 55], width: 3, pointRadius: 6 }));
 
-            if (checked('showDepots')) datasets.push({
-                label: 'Depots',
-                data: chronological.map(e => sum(e, 'depot') + sum(e, 'lta')),
-                borderColor: '#f87171', backgroundColor: g(248,113,113),
-                borderWidth: 2, fill: true, tension: 0.4,
-                pointRadius: 4, pointHoverRadius: 6,
-                pointBackgroundColor: '#f87171', pointBorderColor: '#0f1419', pointBorderWidth: 2
-            });
+            if (checked('showKonten'))
+                datasets.push(line('Konten',
+                    sorted.map(e => accounts.filter(a => a.type === 'konto').reduce((s, a) => s + (e[a.id] || 0), 0)),
+                    '#2dd4bf', { fill: [45, 212, 191], pointRadius: 4 }));
+
+            if (checked('showDepots'))
+                datasets.push(line('Depots',
+                    sorted.map(e => accounts.filter(a => a.type === 'depot' || a.type === 'lta').reduce((s, a) => s + (e[a.id] || 0), 0)),
+                    '#f87171', { fill: [248, 113, 113], pointRadius: 4 }));
 
             const bankLines = [
-                { id: 'showMLP_Konto',      label: 'MLP Konto',              color: '#8b5cf6', field: 'mlp_konto',      dash: [5,5] },
-                { id: 'showMLP_Depot',      label: 'MLP Depot',              color: '#8b5cf6', field: 'mlp_depot' },
-                { id: 'showConsors_Konto',  label: 'Consors Konto',          color: '#3b82f6', field: 'consors_konto',  dash: [5,5] },
-                { id: 'showConsors_Depot',  label: 'Consors Depot',          color: '#3b82f6', field: 'consors_depot' },
-                { id: 'showTR_Konto',       label: 'Trade Republic Konto',   color: '#10b981', field: 'tr_konto',       dash: [5,5] },
-                { id: 'showTR_Depot',       label: 'Trade Republic Depot',   color: '#10b981', field: 'tr_depot' },
-                { id: 'showVB_Konto',       label: 'Volksbank Konto',        color: '#f59e0b', field: 'vb_konto',       dash: [5,5] },
-                { id: 'showVB_Depot',       label: 'Volksbank Depot',        color: '#f59e0b', field: 'vb_depot' },
-                { id: 'showUI_Depot',       label: 'Union Investment Depot', color: '#ec4899', field: 'ui_depot' },
-                { id: 'showAdidas_Konto',   label: 'adidas Konto',           color: '#6366f1', field: 'adidas_konto',   dash: [5,5] },
-                { id: 'showAdidas_Depot',   label: 'adidas Depot',           color: '#6366f1', field: 'adidas_depot' },
-                { id: 'showAdidas_LTA',     label: 'adidas LTA',             color: '#6366f1', field: 'adidas_lta',    dash: [2,2] },
-                { id: 'showCoba_Depot',     label: 'Commerzbank Depot',      color: '#14b8a6', field: 'coba_depot' },
+                ['showMLP_Konto',     'MLP Konto',              '#8b5cf6', 'mlp_konto',     { dash: [5,5] }],
+                ['showMLP_Depot',     'MLP Depot',              '#8b5cf6', 'mlp_depot',     {}],
+                ['showConsors_Konto', 'Consors Konto',          '#3b82f6', 'consors_konto', { dash: [5,5] }],
+                ['showConsors_Depot', 'Consors Depot',          '#3b82f6', 'consors_depot', {}],
+                ['showTR_Konto',      'Trade Republic Konto',   '#10b981', 'tr_konto',      { dash: [5,5] }],
+                ['showTR_Depot',      'Trade Republic Depot',   '#10b981', 'tr_depot',      {}],
+                ['showVB_Konto',      'Volksbank Konto',        '#f59e0b', 'vb_konto',      { dash: [5,5] }],
+                ['showVB_Depot',      'Volksbank Depot',        '#f59e0b', 'vb_depot',      {}],
+                ['showUI_Depot',      'Union Investment Depot', '#ec4899', 'ui_depot',      {}],
+                ['showAdidas_Konto',  'adidas Konto',           '#6366f1', 'adidas_konto',  { dash: [5,5] }],
+                ['showAdidas_Depot',  'adidas Depot',           '#6366f1', 'adidas_depot',  {}],
+                ['showAdidas_LTA',    'adidas LTA',             '#6366f1', 'adidas_lta',    { dash: [2,2] }],
+                ['showCoba_Depot',    'Commerzbank Depot',      '#14b8a6', 'coba_depot',    {}],
             ];
-
-            bankLines.forEach(({ id, label, color, field, dash }) => {
-                if (!checked(id)) return;
-                datasets.push({
-                    label, data: chronological.map(e => e[field] || 0),
-                    borderColor: color, borderWidth: 2, fill: false, tension: 0.4,
-                    pointRadius: 3, pointHoverRadius: 5,
-                    ...(dash ? { borderDash: dash } : {})
-                });
+            bankLines.forEach(([cbId, label, color, field, opts]) => {
+                if (checked(cbId))
+                    datasets.push(line(label, sorted.map(e => e[field] || 0), color, opts));
             });
 
             wealthChart = new Chart(ctx, {
@@ -1192,22 +1049,27 @@
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: {
-                            display: true, position: 'top',
+                            display: true,
+                            position: 'top',
                             labels: {
                                 color: '#f8fafc',
                                 font: { family: 'Work Sans', size: 13, weight: '500' },
-                                padding: 15, usePointStyle: true, pointStyle: 'circle'
+                                padding: 15,
+                                usePointStyle: true,
+                                pointStyle: 'circle'
                             }
                         },
                         tooltip: {
                             backgroundColor: 'rgba(35,41,52,0.95)',
-                            titleColor: '#d4af37', bodyColor: '#f8fafc',
-                            borderColor: '#334155', borderWidth: 1, padding: 12,
+                            titleColor: '#d4af37',
+                            bodyColor: '#f8fafc',
+                            borderColor: '#334155',
+                            borderWidth: 1,
+                            padding: 12,
                             titleFont: { family: 'Playfair Display', size: 14, weight: '600' },
-                            bodyFont: { family: 'Work Sans', size: 13 },
+                            bodyFont:  { family: 'Work Sans', size: 13 },
                             callbacks: {
-                                label: ctx => (ctx.dataset.label || '') + ': ' +
-                                    new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(ctx.parsed.y)
+                                label: ctx => (ctx.dataset.label ? ctx.dataset.label + ': ' : '') + formatCurrency(ctx.parsed.y)
                             }
                         }
                     },
@@ -1219,7 +1081,8 @@
                         y: {
                             grid: { color: 'rgba(51,65,85,0.3)', drawBorder: false },
                             ticks: {
-                                color: '#94a3b8', font: { family: 'Work Sans', size: 11 },
+                                color: '#94a3b8',
+                                font: { family: 'Work Sans', size: 11 },
                                 callback: v => new Intl.NumberFormat('de-DE', {
                                     style: 'currency', currency: 'EUR',
                                     minimumFractionDigits: 0, maximumFractionDigits: 0
@@ -1231,18 +1094,60 @@
             });
         }
 
-        // ── Helpers ──
+        // ── Modals ────────────────────────────────────────────────────
+        function showAddEntryModal() {
+            currentEditingEntryId = null;
+            document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('modalTitle').textContent = 'Neuer Eintrag';
+            document.getElementById('saveEntryBtn').textContent = 'Speichern';
+            clearInputs();
+            document.getElementById('addEntryModal').classList.add('active');
+        }
+
+        function showCompareModal() {
+            document.getElementById('compareModal').classList.add('active');
+            document.getElementById('comparisonResult').innerHTML = '';
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        // ── Helpers ───────────────────────────────────────────────────
+        function clearInputs() {
+            accounts.forEach(acc => { document.getElementById(acc.id).value = ''; });
+        }
+
         function formatCurrency(value) {
-            return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(value);
+            return new Intl.NumberFormat('de-DE', {
+                style: 'currency', currency: 'EUR', minimumFractionDigits: 2
+            }).format(value);
         }
 
         function formatDate(dateStr) {
-            return new Date(dateStr).toLocaleDateString('de-DE', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            return new Date(dateStr).toLocaleDateString('de-DE', {
+                year: 'numeric', month: '2-digit', day: '2-digit'
+            });
         }
 
-        // ── Init ──
+        function exportData() {
+            if (entries.length === 0) { alert('Keine Daten zum Exportieren'); return; }
+            let csv = 'Datum;' + accounts.map(a => a.label).join(';') + '\n';
+            [...entries].reverse().forEach(e => {
+                csv += formatDate(e.date) + ';';
+                csv += accounts.map(a => (e[a.id] || 0).toString().replace('.', ',')).join(';');
+                csv += '\n';
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'finanz-export-' + new Date().toISOString().split('T')[0] + '.csv';
+            link.click();
+        }
+
+        // ── Init ──────────────────────────────────────────────────────
         loadChartPreferences();
-        refreshDisplay(); // show empty/login state before auth resolves
+        initFirebase();
     </script>
 </body>
 </html>
