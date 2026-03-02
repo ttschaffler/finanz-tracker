@@ -238,6 +238,13 @@
             cursor: pointer; transition: border-color 0.2s, color 0.2s;
         }
         .btn-logout:hover { border-color: var(--accent-ruby); color: var(--accent-ruby); }
+
+        /* ── Time Filter ── */
+        .time-filter { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 1.5rem; flex-wrap: wrap; animation: fadeIn 0.8s ease-out 0.25s both; }
+        .time-filter-label { font-size: 0.85rem; color: var(--text-secondary); font-weight: 500; margin-right: 0.35rem; }
+        .time-btn { padding: 0.35rem 0.85rem; background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 8px; font-family: 'Work Sans', sans-serif; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
+        .time-btn:hover { border-color: var(--accent-gold); color: var(--text-primary); }
+        .time-btn.active { background: var(--accent-gold); color: var(--bg-primary); border-color: var(--accent-gold); font-weight: 600; }
     </style>
 </head>
 <body>
@@ -263,6 +270,15 @@
             <button class="btn btn-primary" onclick="showAddEntryModal()">+ Neuer Eintrag</button>
             <button class="btn btn-secondary" onclick="showCompareModal()">Vergleichen</button>
             <button class="btn btn-secondary" onclick="exportData()">Export CSV</button>
+        </div>
+
+        <div class="time-filter">
+            <span class="time-filter-label">Zeitraum:</span>
+            <button class="time-btn" data-range="3m" onclick="setTimeRange('3m')">3M</button>
+            <button class="time-btn" data-range="6m" onclick="setTimeRange('6m')">6M</button>
+            <button class="time-btn" data-range="1y" onclick="setTimeRange('1y')">1J</button>
+            <button class="time-btn" data-range="3y" onclick="setTimeRange('3y')">3J</button>
+            <button class="time-btn active" data-range="all" onclick="setTimeRange('all')">Alles</button>
         </div>
 
         <div style="text-align: center; font-size: 0.9rem; margin-bottom: 1rem;">
@@ -310,6 +326,14 @@
                     <label class="chart-checkbox">
                         <input type="checkbox" id="showDepots" checked onchange="updateChartDisplay()">
                         <span>Depots</span>
+                    </label>
+                    <label class="chart-checkbox">
+                        <input type="checkbox" id="showMSCI" onchange="updateChartDisplay()">
+                        <span>MSCI World (8%)</span>
+                    </label>
+                    <label class="chart-checkbox">
+                        <input type="checkbox" id="showInflation" onchange="updateChartDisplay()">
+                        <span>Inflation (2,5%)</span>
                     </label>
                     <button class="btn-small" onclick="toggleBankDetails()">
                         <span id="bankToggleText">+ Einzelne Banken</span>
@@ -463,6 +487,7 @@
         let entries = [];
         let currentEditingEntryId = null;
         let showBankDetails = false;
+        let activeTimeRange = 'all';
         let wealthChart = null;
         const PREFS_KEY = 'chart_preferences';
 
@@ -529,6 +554,26 @@
             );
         }
 
+        function setTimeRange(range) {
+            activeTimeRange = range;
+            document.querySelectorAll('.time-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.range === range);
+            });
+            const filtered = getFilteredEntries();
+            displayHistory(filtered);
+            renderChart(filtered);
+        }
+
+        function getFilteredEntries() {
+            if (activeTimeRange === 'all') return entries;
+            const cutoff = new Date();
+            if      (activeTimeRange === '3m') cutoff.setMonth(cutoff.getMonth() - 3);
+            else if (activeTimeRange === '6m') cutoff.setMonth(cutoff.getMonth() - 6);
+            else if (activeTimeRange === '1y') cutoff.setFullYear(cutoff.getFullYear() - 1);
+            else if (activeTimeRange === '3y') cutoff.setFullYear(cutoff.getFullYear() - 3);
+            return entries.filter(e => new Date(e.date) >= cutoff);
+        }
+
         function setStatus(state, msg) {
             const dot  = document.getElementById('statusDot');
             const text = document.getElementById('statusText');
@@ -570,10 +615,11 @@
 
         // ── Display ───────────────────────────────────────────────────
         function refreshDisplay() {
+            const filtered = getFilteredEntries();
             updateSummary(entries);
-            displayHistory(entries);
+            displayHistory(filtered);
             updateCompareSelects(entries);
-            renderChart(entries);
+            renderChart(filtered);
         }
 
         function updateSummary(list) {
@@ -700,7 +746,8 @@
             const ids = ['showTotal','showKonten','showDepots','showMLP_Konto','showMLP_Depot',
                 'showConsors_Konto','showConsors_Depot','showTR_Konto','showTR_Depot',
                 'showVB_Konto','showVB_Depot','showUI_Depot','showAdidas_Konto',
-                'showAdidas_Depot','showAdidas_LTA','showCoba_Depot'];
+                'showAdidas_Depot','showAdidas_LTA','showCoba_Depot',
+                'showMSCI','showInflation'];
             const prefs = { showBankDetails };
             ids.forEach(id => { prefs[id] = document.getElementById(id).checked; });
             localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
@@ -731,15 +778,41 @@
             saveChartPreferences();
         }
 
-        function updateChartDisplay() { saveChartPreferences(); renderChart(entries); }
+        function updateChartDisplay() { saveChartPreferences(); renderChart(getFilteredEntries()); }
 
         function renderChart(list) {
             const canvas = document.getElementById('wealthChart');
             const ctx = canvas.getContext('2d');
             if (wealthChart) { wealthChart.destroy(); }
             if (list.length === 0) return;
+
             const sorted = [...list].reverse();
-            const labels = sorted.map(e => formatDate(e.date));
+            const historicalLength = sorted.length;
+
+            // ── 10-year forecast dates from the last entry ──
+            const lastEntryDate = new Date(sorted[sorted.length - 1].date);
+            const forecastDates = [];
+            for (let i = 1; i <= 10; i++) {
+                const d = new Date(lastEntryDate);
+                d.setFullYear(d.getFullYear() + i);
+                forecastDates.push(d.toISOString().split('T')[0]);
+            }
+            const allDates = [...sorted.map(e => e.date), ...forecastDates];
+            const labels   = allDates.map(d => formatDate(d));
+
+            // ── Benchmark base: first visible entry ──
+            const baseDate  = sorted[0].date;
+            const baseTotal = accounts.reduce((s, a) => s + (sorted[0][a.id] || 0), 0);
+            const MSCI_RATE = 0.08;
+            const INFL_RATE = 0.025;
+            function yearsBetween(d1, d2) {
+                return (new Date(d2) - new Date(d1)) / (365.25 * 24 * 3600 * 1000);
+            }
+            const msciValues = allDates.map(d =>
+                Math.round(baseTotal * Math.pow(1 + MSCI_RATE, yearsBetween(baseDate, d)) * 100) / 100);
+            const inflValues = allDates.map(d =>
+                Math.round(baseTotal * Math.pow(1 + INFL_RATE, yearsBetween(baseDate, d)) * 100) / 100);
+
             const datasets = [];
             function makeGradient(r, g, b) {
                 const grad = ctx.createLinearGradient(0, 0, 0, 400);
@@ -748,6 +821,9 @@
                 return grad;
             }
             const checked = id => document.getElementById(id).checked;
+            const nf = n => Array(n).fill(null);
+            const forecastSeg = { borderDash: c => c.p0DataIndex >= historicalLength - 1 ? [8, 4] : [] };
+
             function line(label, data, color, opts = {}) {
                 return {
                     label, data, borderColor: color,
@@ -756,15 +832,24 @@
                     pointRadius: opts.pointRadius ?? 3,
                     pointHoverRadius: (opts.pointRadius ?? 3) + 2,
                     pointBackgroundColor: color, pointBorderColor: '#0f1419', pointBorderWidth: 2,
-                    borderDash: opts.dash ?? []
+                    borderDash: opts.dash ?? [],
+                    ...(opts.segment ? { segment: opts.segment } : {})
                 };
             }
+
             if (checked('showTotal'))
-                datasets.push(line('Gesamtvermögen', sorted.map(e => accounts.reduce((s, a) => s + (e[a.id] || 0), 0)), '#d4af37', { fill: [212, 175, 55], width: 3, pointRadius: 6 }));
+                datasets.push(line('Gesamtvermögen',
+                    [...sorted.map(e => accounts.reduce((s, a) => s + (e[a.id] || 0), 0)), ...nf(10)],
+                    '#d4af37', { fill: [212, 175, 55], width: 3, pointRadius: 6 }));
             if (checked('showKonten'))
-                datasets.push(line('Konten', sorted.map(e => accounts.filter(a => a.type === 'konto').reduce((s, a) => s + (e[a.id] || 0), 0)), '#2dd4bf', { fill: [45, 212, 191], pointRadius: 4 }));
+                datasets.push(line('Konten',
+                    [...sorted.map(e => accounts.filter(a => a.type === 'konto').reduce((s, a) => s + (e[a.id] || 0), 0)), ...nf(10)],
+                    '#2dd4bf', { fill: [45, 212, 191], pointRadius: 4 }));
             if (checked('showDepots'))
-                datasets.push(line('Depots', sorted.map(e => accounts.filter(a => a.type === 'depot' || a.type === 'lta').reduce((s, a) => s + (e[a.id] || 0), 0)), '#f87171', { fill: [248, 113, 113], pointRadius: 4 }));
+                datasets.push(line('Depots',
+                    [...sorted.map(e => accounts.filter(a => a.type === 'depot' || a.type === 'lta').reduce((s, a) => s + (e[a.id] || 0), 0)), ...nf(10)],
+                    '#f87171', { fill: [248, 113, 113], pointRadius: 4 }));
+
             const bankLines = [
                 ['showMLP_Konto',     'MLP Konto',              '#8b5cf6', 'mlp_konto',     { dash: [5,5] }],
                 ['showMLP_Depot',     'MLP Depot',              '#8b5cf6', 'mlp_depot',     {}],
@@ -781,11 +866,47 @@
                 ['showCoba_Depot',    'Commerzbank Depot',      '#14b8a6', 'coba_depot',    {}],
             ];
             bankLines.forEach(([cbId, label, color, field, opts]) => {
-                if (checked(cbId)) datasets.push(line(label, sorted.map(e => e[field] || 0), color, opts));
+                if (checked(cbId))
+                    datasets.push(line(label, [...sorted.map(e => e[field] || 0), ...nf(10)], color, opts));
             });
+
+            // ── MSCI World benchmark (solid history → dashed forecast) ──
+            if (checked('showMSCI'))
+                datasets.push(line('MSCI World (8% p.a.)', msciValues, '#f97316',
+                    { width: 2, pointRadius: 2, segment: forecastSeg }));
+
+            // ── Inflation / Kaufkrafterhalt (solid history → dashed forecast) ──
+            if (checked('showInflation'))
+                datasets.push(line('Kaufkrafterhalt (2,5% p.a.)', inflValues, '#94a3b8',
+                    { width: 1.5, pointRadius: 1, segment: forecastSeg }));
+
+            // ── Inline plugin: vertical divider at forecast boundary ──
+            const dividerPlugin = {
+                id: 'forecastDivider',
+                afterDraw(chart) {
+                    if (historicalLength >= allDates.length) return;
+                    const { ctx: c, scales: { x, y } } = chart;
+                    const px = x.getPixelForValue(historicalLength - 1);
+                    c.save();
+                    c.strokeStyle = 'rgba(148,163,184,0.3)';
+                    c.lineWidth = 1;
+                    c.setLineDash([5, 4]);
+                    c.beginPath();
+                    c.moveTo(px, y.top);
+                    c.lineTo(px, y.bottom);
+                    c.stroke();
+                    c.setLineDash([]);
+                    c.font = '11px "Work Sans", sans-serif';
+                    c.fillStyle = 'rgba(148,163,184,0.55)';
+                    c.fillText('Prognose \u25b6', px + 6, y.top + 16);
+                    c.restore();
+                }
+            };
+
             wealthChart = new Chart(ctx, {
                 type: 'line',
                 data: { labels, datasets },
+                plugins: [dividerPlugin],
                 options: {
                     responsive: true, maintainAspectRatio: true,
                     interaction: { mode: 'index', intersect: false },
@@ -796,11 +917,11 @@
                             borderColor: '#334155', borderWidth: 1, padding: 12,
                             titleFont: { family: 'Playfair Display', size: 14, weight: '600' },
                             bodyFont:  { family: 'Work Sans', size: 13 },
-                            callbacks: { label: ctx => (ctx.dataset.label ? ctx.dataset.label + ': ' : '') + formatCurrency(ctx.parsed.y) }
+                            callbacks: { label: c => (c.dataset.label ? c.dataset.label + ': ' : '') + (c.parsed.y != null ? formatCurrency(c.parsed.y) : '\u2014') }
                         }
                     },
                     scales: {
-                        x: { grid: { color: 'rgba(51,65,85,0.3)', drawBorder: false }, ticks: { color: '#94a3b8', font: { family: 'Work Sans', size: 11 } } },
+                        x: { grid: { color: 'rgba(51,65,85,0.3)', drawBorder: false }, ticks: { color: '#94a3b8', font: { family: 'Work Sans', size: 11 }, maxTicksLimit: 16 } },
                         y: { grid: { color: 'rgba(51,65,85,0.3)', drawBorder: false }, ticks: { color: '#94a3b8', font: { family: 'Work Sans', size: 11 }, callback: v => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v) } }
                     }
                 }
