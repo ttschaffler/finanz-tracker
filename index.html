@@ -240,7 +240,7 @@
         .btn-logout:hover { border-color: var(--accent-ruby); color: var(--accent-ruby); }
 
         /* ── Time Filter ── */
-        .time-filter { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 1.5rem; flex-wrap: wrap; animation: fadeIn 0.8s ease-out 0.25s both; }
+        .time-filter { display: flex; align-items: center; gap: 0.4rem; margin-top: 1.5rem; flex-wrap: wrap; }
         .time-filter-label { font-size: 0.85rem; color: var(--text-secondary); font-weight: 500; margin-right: 0.35rem; }
         .time-btn { padding: 0.35rem 0.85rem; background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 8px; font-family: 'Work Sans', sans-serif; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
         .time-btn:hover { border-color: var(--accent-gold); color: var(--text-primary); }
@@ -270,15 +270,6 @@
             <button class="btn btn-primary" onclick="showAddEntryModal()">+ Neuer Eintrag</button>
             <button class="btn btn-secondary" onclick="showCompareModal()">Vergleichen</button>
             <button class="btn btn-secondary" onclick="exportData()">Export CSV</button>
-        </div>
-
-        <div class="time-filter">
-            <span class="time-filter-label">Zeitraum:</span>
-            <button class="time-btn" data-range="3m" onclick="setTimeRange('3m')">3M</button>
-            <button class="time-btn" data-range="6m" onclick="setTimeRange('6m')">6M</button>
-            <button class="time-btn" data-range="1y" onclick="setTimeRange('1y')">1J</button>
-            <button class="time-btn" data-range="3y" onclick="setTimeRange('3y')">3J</button>
-            <button class="time-btn active" data-range="all" onclick="setTimeRange('all')">Alles</button>
         </div>
 
         <div style="text-align: center; font-size: 0.9rem; margin-bottom: 1rem;">
@@ -379,6 +370,14 @@
                 </div>
             </div>
             <canvas id="wealthChart"></canvas>
+            <div class="time-filter">
+                <span class="time-filter-label">Zeitraum:</span>
+                <button class="time-btn" data-range="3m" onclick="setTimeRange('3m')">3M</button>
+                <button class="time-btn" data-range="6m" onclick="setTimeRange('6m')">6M</button>
+                <button class="time-btn" data-range="1y" onclick="setTimeRange('1y')">1J</button>
+                <button class="time-btn" data-range="3y" onclick="setTimeRange('3y')">3J</button>
+                <button class="time-btn active" data-range="all" onclick="setTimeRange('all')">Alles</button>
+            </div>
         </div>
 
         <div class="history-section">
@@ -788,15 +787,21 @@
 
             const sorted = [...list].reverse();
             const historicalLength = sorted.length;
+            const checked = id => document.getElementById(id).checked;
+            const nf = n => Array(n).fill(null);
 
-            // ── 10-year forecast dates from the last entry ──
+            // ── 10-year forecast dates from the last entry (only when Inflation is active) ──
+            const showForecast = checked('showInflation');
             const lastEntryDate = new Date(sorted[sorted.length - 1].date);
             const forecastDates = [];
-            for (let i = 1; i <= 10; i++) {
-                const d = new Date(lastEntryDate);
-                d.setFullYear(d.getFullYear() + i);
-                forecastDates.push(d.toISOString().split('T')[0]);
+            if (showForecast) {
+                for (let i = 1; i <= 10; i++) {
+                    const d = new Date(lastEntryDate);
+                    d.setFullYear(d.getFullYear() + i);
+                    forecastDates.push(d.toISOString().split('T')[0]);
+                }
             }
+            const forecastCount = forecastDates.length;
             const allDates = [...sorted.map(e => e.date), ...forecastDates];
             const labels   = allDates.map(d => formatDate(d));
 
@@ -820,8 +825,6 @@
                 grad.addColorStop(1, `rgba(${r},${g},${b},0.0)`);
                 return grad;
             }
-            const checked = id => document.getElementById(id).checked;
-            const nf = n => Array(n).fill(null);
             const forecastSeg = { borderDash: c => c.p0DataIndex >= historicalLength - 1 ? [8, 4] : [] };
 
             function line(label, data, color, opts = {}) {
@@ -839,15 +842,15 @@
 
             if (checked('showTotal'))
                 datasets.push(line('Gesamtvermögen',
-                    [...sorted.map(e => accounts.reduce((s, a) => s + (e[a.id] || 0), 0)), ...nf(10)],
+                    [...sorted.map(e => accounts.reduce((s, a) => s + (e[a.id] || 0), 0)), ...nf(forecastCount)],
                     '#d4af37', { fill: [212, 175, 55], width: 3, pointRadius: 6 }));
             if (checked('showKonten'))
                 datasets.push(line('Konten',
-                    [...sorted.map(e => accounts.filter(a => a.type === 'konto').reduce((s, a) => s + (e[a.id] || 0), 0)), ...nf(10)],
+                    [...sorted.map(e => accounts.filter(a => a.type === 'konto').reduce((s, a) => s + (e[a.id] || 0), 0)), ...nf(forecastCount)],
                     '#2dd4bf', { fill: [45, 212, 191], pointRadius: 4 }));
             if (checked('showDepots'))
                 datasets.push(line('Depots',
-                    [...sorted.map(e => accounts.filter(a => a.type === 'depot' || a.type === 'lta').reduce((s, a) => s + (e[a.id] || 0), 0)), ...nf(10)],
+                    [...sorted.map(e => accounts.filter(a => a.type === 'depot' || a.type === 'lta').reduce((s, a) => s + (e[a.id] || 0), 0)), ...nf(forecastCount)],
                     '#f87171', { fill: [248, 113, 113], pointRadius: 4 }));
 
             const bankLines = [
@@ -867,7 +870,7 @@
             ];
             bankLines.forEach(([cbId, label, color, field, opts]) => {
                 if (checked(cbId))
-                    datasets.push(line(label, [...sorted.map(e => e[field] || 0), ...nf(10)], color, opts));
+                    datasets.push(line(label, [...sorted.map(e => e[field] || 0), ...nf(forecastCount)], color, opts));
             });
 
             // ── MSCI World benchmark (solid history → dashed forecast) ──
@@ -906,7 +909,7 @@
             wealthChart = new Chart(ctx, {
                 type: 'line',
                 data: { labels, datasets },
-                plugins: [dividerPlugin],
+                plugins: showForecast ? [dividerPlugin] : [],
                 options: {
                     responsive: true, maintainAspectRatio: true,
                     interaction: { mode: 'index', intersect: false },
