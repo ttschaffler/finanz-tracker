@@ -367,6 +367,10 @@
                         <div style="font-weight: 600; color: #14b8a6; margin-bottom: 0.5rem; font-size: 0.9rem;">Commerzbank</div>
                         <label class="chart-checkbox"><input type="checkbox" id="showCoba_Depot" onchange="updateChartDisplay()"><span>Depot</span></label>
                     </div>
+                    <div style="border-left: 3px solid #e11d48; padding-left: 0.75rem;">
+                        <div style="font-weight: 600; color: #e11d48; margin-bottom: 0.5rem; font-size: 0.9rem;">Allianz Riester</div>
+                        <label class="chart-checkbox"><input type="checkbox" id="showAllianz_Konto" onchange="updateChartDisplay()"><span>Konto</span></label>
+                    </div>
                 </div>
             </div>
             <canvas id="wealthChart"></canvas>
@@ -429,6 +433,10 @@
                     <div class="bank-column">
                         <div class="bank-header">Commerzbank</div>
                         <div class="input-group"><label>Depot</label><input type="number" step="0.01" id="coba_depot" placeholder="0.00"></div>
+                    </div>
+                    <div class="bank-column">
+                        <div class="bank-header">Allianz Riester</div>
+                        <div class="input-group"><label>Konto</label><input type="number" step="0.01" id="allianz_konto" placeholder="0.00"></div>
                     </div>
                 </div>
                 <div style="margin-top: 2rem; display: flex; gap: 1rem;">
@@ -503,7 +511,8 @@
             { id: 'adidas_konto',  label: 'adidas Konto',            type: 'konto' },
             { id: 'adidas_depot',  label: 'adidas Depot',            type: 'depot' },
             { id: 'adidas_lta',    label: 'adidas LTA',              type: 'lta'   },
-            { id: 'coba_depot',    label: 'Commerzbank Depot',       type: 'depot' }
+            { id: 'coba_depot',    label: 'Commerzbank Depot',       type: 'depot' },
+            { id: 'allianz_konto', label: 'Allianz Riester Konto',   type: 'konto' }
         ];
 
         // ── Auth ──────────────────────────────────────────────────────
@@ -745,7 +754,7 @@
             const ids = ['showTotal','showKonten','showDepots','showMLP_Konto','showMLP_Depot',
                 'showConsors_Konto','showConsors_Depot','showTR_Konto','showTR_Depot',
                 'showVB_Konto','showVB_Depot','showUI_Depot','showAdidas_Konto',
-                'showAdidas_Depot','showAdidas_LTA','showCoba_Depot',
+                'showAdidas_Depot','showAdidas_LTA','showCoba_Depot','showAllianz_Konto',
                 'showMSCI','showInflation'];
             const prefs = { showBankDetails };
             ids.forEach(id => { prefs[id] = document.getElementById(id).checked; });
@@ -867,6 +876,7 @@
                 ['showAdidas_Depot',  'adidas Depot',           '#6366f1', 'adidas_depot',  {}],
                 ['showAdidas_LTA',    'adidas LTA',             '#6366f1', 'adidas_lta',    { dash: [2,2] }],
                 ['showCoba_Depot',    'Commerzbank Depot',      '#14b8a6', 'coba_depot',    {}],
+                ['showAllianz_Konto', 'Allianz Riester Konto',  '#e11d48', 'allianz_konto', { dash: [5,5] }],
             ];
             bankLines.forEach(([cbId, label, color, field, opts]) => {
                 if (checked(cbId))
