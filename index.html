@@ -511,6 +511,17 @@
                     <label>Jährliche Inflation (%)</label>
                     <input type="number" step="0.1" id="rl_inflation" placeholder="2.5" value="2.5">
                 </div>
+                <div class="input-group">
+                    <label>Bestehendes Vermögen</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="number" step="0.01" id="rl_vermoegen" placeholder="0.00" style="flex: 1;">
+                        <button class="btn btn-secondary" onclick="uebernahmeVermoegen()" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Entnahmezeitraum (Jahre)</label>
+                    <input type="number" id="rl_entnahmezeitraum" placeholder="25" min="1" max="99">
+                </div>
             </div>
             <div id="rentenlueckeResult" style="margin-top: 1.5rem;"></div>
             <div style="margin-top: 1.5rem; display: flex; gap: 1rem;">
@@ -1047,14 +1058,23 @@
             document.getElementById('rentenlueckeModal').classList.add('active');
         }
 
+        function uebernahmeVermoegen() {
+            if (entries.length === 0) { alert('Keine Einträge vorhanden'); return; }
+            const latest = entries[0];
+            const total = accounts.reduce((s, a) => s + (latest[a.id] || 0), 0);
+            document.getElementById('rl_vermoegen').value = total.toFixed(2);
+        }
+
         function berechneRentenluecke() {
             const alter = parseInt(document.getElementById('rl_alter').value);
             const rentenalter = parseInt(document.getElementById('rl_rentenalter').value);
             const gesetzlich = parseFloat(document.getElementById('rl_gesetzliche_rente').value);
             const wunschrente = parseFloat(document.getElementById('rl_wunschrente').value);
             const inflation = parseFloat(document.getElementById('rl_inflation').value);
+            const vermoegen = parseFloat(document.getElementById('rl_vermoegen').value) || 0;
+            const entnahmezeitraum = parseInt(document.getElementById('rl_entnahmezeitraum').value);
 
-            if (!alter || !rentenalter || isNaN(gesetzlich) || isNaN(wunschrente) || isNaN(inflation)) {
+            if (!alter || !rentenalter || isNaN(gesetzlich) || isNaN(wunschrente) || isNaN(inflation) || !entnahmezeitraum) {
                 alert('Bitte alle Felder ausfüllen');
                 return;
             }
@@ -1072,8 +1092,11 @@
             // Rentenlücke pro Monat
             const lueckeMonat = wunschrenteInflationsbereinigt - gesetzlich;
 
-            // Benötigtes Kapital (4%-Regel: Jahresentnahme / 0.04)
-            const benoetigtesKapital = Math.max(0, lueckeMonat * 12 / 0.04);
+            // Benötigtes Kapital für den Entnahmezeitraum (Kapitalverzehr)
+            const benoetigtesKapital = Math.max(0, lueckeMonat * 12 * entnahmezeitraum);
+
+            // Vermögenslücke: benötigtes Kapital minus bestehendes Vermögen
+            const vermoegenslücke = Math.max(0, benoetigtesKapital - vermoegen);
 
             const container = document.getElementById('rentenlueckeResult');
             container.innerHTML = `
@@ -1097,9 +1120,18 @@
                             ${formatCurrency(lueckeMonat)}
                         </strong>
                     </div>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary);">
-                        Benötigtes Kapital (4%-Regel):
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Benötigtes Kapital (${entnahmezeitraum} Jahre Entnahme):
                         <strong style="color: var(--accent-gold); font-size: 1.1rem;">${formatCurrency(benoetigtesKapital)}</strong>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Bestehendes Vermögen: <strong style="color: var(--text-primary);">${formatCurrency(vermoegen)}</strong>
+                    </div>
+                    <div style="font-size: 1.1rem; color: var(--text-secondary); padding-top: 1rem; border-top: 1px solid var(--border);">
+                        Vermögenslücke:
+                        <strong style="color: ${vermoegenslücke > 0 ? 'var(--accent-ruby)' : 'var(--accent-emerald)'}; font-size: 1.3rem;">
+                            ${formatCurrency(vermoegenslücke)}
+                        </strong>
                     </div>
                 </div>
             `;
