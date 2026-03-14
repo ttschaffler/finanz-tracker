@@ -102,7 +102,14 @@
             margin-bottom: 0.75rem; padding-bottom: 0.5rem;
             border-bottom: 2px solid var(--border);
             text-transform: uppercase; letter-spacing: 0.05em; text-align: center;
+            display: flex; align-items: center; justify-content: center; gap: 0.4rem;
         }
+        .copy-bank-btn {
+            background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px;
+            color: var(--text-secondary); cursor: pointer; font-size: 0.65rem; padding: 0.15rem 0.35rem;
+            line-height: 1; transition: all 0.2s;
+        }
+        .copy-bank-btn:hover { color: var(--accent-gold); border-color: var(--accent-gold); }
         .input-group { position: relative; }
         .input-group label {
             display: block; margin-bottom: 0.4rem;
@@ -399,44 +406,44 @@
                     <label>Datum</label>
                     <input type="date" id="entryDate" required>
                 </div>
-                <button class="btn btn-secondary" id="copyPreviousBtn" onclick="copyPreviousEntry()" style="margin-bottom: 1rem; font-size: 0.85rem;">Werte vom letzten Eintrag übernehmen</button>
+                <button class="btn btn-secondary copy-all-btn" id="copyPreviousBtn" onclick="copyPreviousEntry()" style="margin-bottom: 1rem; font-size: 0.85rem;">Alle Werte vom letzten Eintrag übernehmen</button>
                 <div class="banks-container">
                     <div class="bank-column">
-                        <div class="bank-header">MLP</div>
+                        <div class="bank-header">MLP <button class="copy-bank-btn" onclick="copyPreviousBank('mlp')" title="Werte übernehmen">&#x25C0;</button></div>
                         <div class="input-group" style="margin-bottom: 0.5rem;"><label>Konto</label><input type="number" step="0.01" id="mlp_konto" placeholder="0.00"></div>
                         <div class="input-group"><label>Depot</label><input type="number" step="0.01" id="mlp_depot" placeholder="0.00"></div>
                     </div>
                     <div class="bank-column">
-                        <div class="bank-header">Consors</div>
+                        <div class="bank-header">Consors <button class="copy-bank-btn" onclick="copyPreviousBank('consors')" title="Werte übernehmen">&#x25C0;</button></div>
                         <div class="input-group" style="margin-bottom: 0.5rem;"><label>Konto</label><input type="number" step="0.01" id="consors_konto" placeholder="0.00"></div>
                         <div class="input-group"><label>Depot</label><input type="number" step="0.01" id="consors_depot" placeholder="0.00"></div>
                     </div>
                     <div class="bank-column">
-                        <div class="bank-header">Trade Republic</div>
+                        <div class="bank-header">Trade Republic <button class="copy-bank-btn" onclick="copyPreviousBank('tr')" title="Werte übernehmen">&#x25C0;</button></div>
                         <div class="input-group" style="margin-bottom: 0.5rem;"><label>Konto</label><input type="number" step="0.01" id="tr_konto" placeholder="0.00"></div>
                         <div class="input-group"><label>Depot</label><input type="number" step="0.01" id="tr_depot" placeholder="0.00"></div>
                     </div>
                     <div class="bank-column">
-                        <div class="bank-header">Volksbank</div>
+                        <div class="bank-header">Volksbank <button class="copy-bank-btn" onclick="copyPreviousBank('vb')" title="Werte übernehmen">&#x25C0;</button></div>
                         <div class="input-group" style="margin-bottom: 0.5rem;"><label>Konto</label><input type="number" step="0.01" id="vb_konto" placeholder="0.00"></div>
                         <div class="input-group"><label>Depot</label><input type="number" step="0.01" id="vb_depot" placeholder="0.00"></div>
                     </div>
                     <div class="bank-column">
-                        <div class="bank-header">Union Investment</div>
+                        <div class="bank-header">Union Investment <button class="copy-bank-btn" onclick="copyPreviousBank('ui')" title="Werte übernehmen">&#x25C0;</button></div>
                         <div class="input-group"><label>Depot</label><input type="number" step="0.01" id="ui_depot" placeholder="0.00"></div>
                     </div>
                     <div class="bank-column">
-                        <div class="bank-header">adidas</div>
+                        <div class="bank-header">adidas <button class="copy-bank-btn" onclick="copyPreviousBank('adidas')" title="Werte übernehmen">&#x25C0;</button></div>
                         <div class="input-group" style="margin-bottom: 0.5rem;"><label>Konto</label><input type="number" step="0.01" id="adidas_konto" placeholder="0.00"></div>
                         <div class="input-group" style="margin-bottom: 0.5rem;"><label>Depot</label><input type="number" step="0.01" id="adidas_depot" placeholder="0.00"></div>
                         <div class="input-group"><label>LTA</label><input type="number" step="0.01" id="adidas_lta" placeholder="0.00"></div>
                     </div>
                     <div class="bank-column">
-                        <div class="bank-header">Commerzbank</div>
+                        <div class="bank-header">Commerzbank <button class="copy-bank-btn" onclick="copyPreviousBank('coba')" title="Werte übernehmen">&#x25C0;</button></div>
                         <div class="input-group"><label>Depot</label><input type="number" step="0.01" id="coba_depot" placeholder="0.00"></div>
                     </div>
                     <div class="bank-column">
-                        <div class="bank-header">Allianz Riester</div>
+                        <div class="bank-header">Allianz Riester <button class="copy-bank-btn" onclick="copyPreviousBank('allianz')" title="Werte übernehmen">&#x25C0;</button></div>
                         <div class="input-group"><label>Konto</label><input type="number" step="0.01" id="allianz_konto" placeholder="0.00"></div>
                     </div>
                 </div>
@@ -723,6 +730,7 @@
             document.getElementById('modalTitle').textContent = 'Eintrag bearbeiten – ' + formatDate(entry.date);
             document.getElementById('saveEntryBtn').textContent = 'Änderungen speichern';
             document.getElementById('copyPreviousBtn').style.display = 'none';
+            document.querySelectorAll('.copy-bank-btn').forEach(b => b.style.display = 'none');
             document.getElementById('addEntryModal').classList.add('active');
         }
 
@@ -950,6 +958,7 @@
             document.getElementById('modalTitle').textContent = 'Neuer Eintrag';
             document.getElementById('saveEntryBtn').textContent = 'Speichern';
             document.getElementById('copyPreviousBtn').style.display = '';
+            document.querySelectorAll('.copy-bank-btn').forEach(b => b.style.display = '');
             clearInputs();
             document.getElementById('addEntryModal').classList.add('active');
         }
@@ -957,6 +966,14 @@
             if (entries.length === 0) { alert('Keine vorherigen Einträge vorhanden'); return; }
             const latest = entries[0];
             accounts.forEach(acc => {
+                const val = latest[acc.id];
+                document.getElementById(acc.id).value = val ? val : '';
+            });
+        }
+        function copyPreviousBank(prefix) {
+            if (entries.length === 0) { alert('Keine vorherigen Einträge vorhanden'); return; }
+            const latest = entries[0];
+            accounts.filter(acc => acc.id.startsWith(prefix + '_')).forEach(acc => {
                 const val = latest[acc.id];
                 document.getElementById(acc.id).value = val ? val : '';
             });
