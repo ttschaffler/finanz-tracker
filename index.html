@@ -516,9 +516,13 @@
                         <label>Entnahmedauer Rente (Jahre)</label>
                         <input type="number" id="rl_entnahmedauer" placeholder="25" min="10" max="40">
                     </div>
-                </div>
-                <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);">
-                    Aktuelles Vermögen wird aus dem letzten Eintrag übernommen: <strong id="rl_vermoegen_display">–</strong>
+                    <div class="input-group" style="grid-column: 1 / -1;">
+                        <label>Aktuelles Vermögen (€)</label>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="number" id="rl_vermoegen" placeholder="0.00" step="0.01" style="flex: 1;">
+                            <button class="btn btn-secondary" onclick="rlUebernehmen()" style="white-space: nowrap; font-size: 0.85rem;" title="Wert aus letztem Eintrag übernehmen">Übernehmen</button>
+                        </div>
+                    </div>
                 </div>
                 <div id="rentenlueckeResult" style="margin-top: 1.5rem;"></div>
                 <div style="margin-top: 2rem; display: flex; gap: 1rem;">
@@ -1053,12 +1057,14 @@
 
         // ── Rentenlücke ─────────────────────────────────────────────
         function showRentenlueckeModal() {
-            const vermoegen = entries.length > 0
-                ? accounts.reduce((s, a) => s + (entries[0][a.id] || 0), 0)
-                : 0;
-            document.getElementById('rl_vermoegen_display').textContent = formatCurrency(vermoegen);
             document.getElementById('rentenlueckeResult').innerHTML = '';
             document.getElementById('rentenlueckeModal').classList.add('active');
+        }
+
+        function rlUebernehmen() {
+            if (entries.length === 0) { alert('Keine Einträge vorhanden'); return; }
+            const vermoegen = accounts.reduce((s, a) => s + (entries[0][a.id] || 0), 0);
+            document.getElementById('rl_vermoegen').value = vermoegen.toFixed(2);
         }
 
         function berechneRentenluecke() {
@@ -1075,9 +1081,7 @@
             if (rentenalter <= alter) { alert('Rentenalter muss größer als aktuelles Alter sein'); return; }
 
             const jahresBisRente = rentenalter - alter;
-            const vermoegen = entries.length > 0
-                ? accounts.reduce((s, a) => s + (entries[0][a.id] || 0), 0)
-                : 0;
+            const vermoegen = parseFloat(document.getElementById('rl_vermoegen').value) || 0;
 
             // Monatliche Rentenlücke
             const lueckeMonat = Math.max(0, wunschrente - gesetzlich);
