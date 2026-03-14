@@ -399,6 +399,7 @@
                     <label>Datum</label>
                     <input type="date" id="entryDate" required>
                 </div>
+                <button class="btn btn-secondary" id="copyPreviousBtn" onclick="copyPreviousEntry()" style="margin-bottom: 1rem; font-size: 0.85rem;">Werte vom letzten Eintrag übernehmen</button>
                 <div class="banks-container">
                     <div class="bank-column">
                         <div class="bank-header">MLP</div>
@@ -721,6 +722,7 @@
             });
             document.getElementById('modalTitle').textContent = 'Eintrag bearbeiten – ' + formatDate(entry.date);
             document.getElementById('saveEntryBtn').textContent = 'Änderungen speichern';
+            document.getElementById('copyPreviousBtn').style.display = 'none';
             document.getElementById('addEntryModal').classList.add('active');
         }
 
@@ -947,8 +949,17 @@
             document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('modalTitle').textContent = 'Neuer Eintrag';
             document.getElementById('saveEntryBtn').textContent = 'Speichern';
+            document.getElementById('copyPreviousBtn').style.display = '';
             clearInputs();
             document.getElementById('addEntryModal').classList.add('active');
+        }
+        function copyPreviousEntry() {
+            if (entries.length === 0) { alert('Keine vorherigen Einträge vorhanden'); return; }
+            const latest = entries[0];
+            accounts.forEach(acc => {
+                const val = latest[acc.id];
+                document.getElementById(acc.id).value = val ? val : '';
+            });
         }
         function showCompareModal() { document.getElementById('compareModal').classList.add('active'); document.getElementById('comparisonResult').innerHTML = ''; }
         function closeModal(id) { document.getElementById(id).classList.remove('active'); }
