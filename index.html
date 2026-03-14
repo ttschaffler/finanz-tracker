@@ -488,7 +488,7 @@
     </div>
     <!-- Modal: Rentenlücke -->
     <div class="modal" id="rentenlueckeModal">
-        <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-content" style="max-width: 900px;">
             <h2 class="section-title">Rentenlücke berechnen</h2>
             <div style="display: grid; gap: 1rem; margin-top: 1rem;">
                 <div class="input-group">
@@ -519,11 +519,18 @@
                     </div>
                 </div>
                 <div class="input-group">
+                    <label>Verzinsung Vermögen (% p.a.)</label>
+                    <input type="number" step="0.1" id="rl_verzinsung" placeholder="5.0" value="5.0">
+                </div>
+                <div class="input-group">
                     <label>Entnahmezeitraum (Jahre)</label>
                     <input type="number" id="rl_entnahmezeitraum" placeholder="25" min="1" max="99">
                 </div>
             </div>
             <div id="rentenlueckeResult" style="margin-top: 1.5rem;"></div>
+            <div id="rentenlueckeChartContainer" style="display: none; margin-top: 1.5rem;">
+                <canvas id="rentenlueckeChart"></canvas>
+            </div>
             <div style="margin-top: 1.5rem; display: flex; gap: 1rem;">
                 <button class="btn btn-primary" onclick="berechneRentenluecke()" style="flex: 1;">Berechnen</button>
                 <button class="btn btn-secondary" onclick="closeModal('rentenlueckeModal')">Schließen</button>
@@ -1065,6 +1072,8 @@
             document.getElementById('rl_vermoegen').value = total.toFixed(2);
         }
 
+        let rentenlueckeChart = null;
+
         function berechneRentenluecke() {
             const alter = parseInt(document.getElementById('rl_alter').value);
             const rentenalter = parseInt(document.getElementById('rl_rentenalter').value);
@@ -1072,9 +1081,10 @@
             const wunschrente = parseFloat(document.getElementById('rl_wunschrente').value);
             const inflation = parseFloat(document.getElementById('rl_inflation').value);
             const vermoegen = parseFloat(document.getElementById('rl_vermoegen').value) || 0;
+            const verzinsung = parseFloat(document.getElementById('rl_verzinsung').value);
             const entnahmezeitraum = parseInt(document.getElementById('rl_entnahmezeitraum').value);
 
-            if (!alter || !rentenalter || isNaN(gesetzlich) || isNaN(wunschrente) || isNaN(inflation) || !entnahmezeitraum) {
+            if (!alter || !rentenalter || isNaN(gesetzlich) || isNaN(wunschrente) || isNaN(inflation) || isNaN(verzinsung) || !entnahmezeitraum) {
                 alert('Bitte alle Felder ausfüllen');
                 return;
             }
@@ -1085,6 +1095,10 @@
 
             const jahresBisRente = rentenalter - alter;
             const inflationsRate = inflation / 100;
+            const verzinsungsRate = verzinsung / 100;
+
+            // Vermögen wächst bis Renteneintritt mit Verzinsung
+            const vermoegenBeiRente = vermoegen * Math.pow(1 + verzinsungsRate, jahresBisRente);
 
             // Gewünschte Rente inflationsbereinigt zum Renteneintritt
             const wunschrenteInflationsbereinigt = wunschrente * Math.pow(1 + inflationsRate, jahresBisRente);
@@ -1092,11 +1106,35 @@
             // Rentenlücke pro Monat
             const lueckeMonat = wunschrenteInflationsbereinigt - gesetzlich;
 
-            // Benötigtes Kapital für den Entnahmezeitraum (Kapitalverzehr)
-            const benoetigtesKapital = Math.max(0, lueckeMonat * 12 * entnahmezeitraum);
+            // ── Verlauf ab Renteneintritt ──
+            const labels = [];
+            const vermoegenVerlauf = [];
+            const renteVerlauf = [];
+            let aktuellesVermoegen = vermoegenBeiRente;
+            let aktuelleEntnahme = Math.max(0, lueckeMonat) * 12; // jährliche Entnahme
 
-            // Vermögenslücke: benötigtes Kapital minus bestehendes Vermögen
-            const vermoegenslücke = Math.max(0, benoetigtesKapital - vermoegen);
+            for (let j = 0; j <= entnahmezeitraum; j++) {
+                labels.push(`${rentenalter + j} J.`);
+                vermoegenVerlauf.push(Math.round(aktuellesVermoegen * 100) / 100);
+                renteVerlauf.push(Math.round((wunschrenteInflationsbereinigt * Math.pow(1 + inflationsRate, j)) * 100) / 100);
+
+                if (j < entnahmezeitraum) {
+                    // Verzinsung auf Restvermögen, dann Entnahme
+                    aktuellesVermoegen = aktuellesVermoegen * (1 + verzinsungsRate) - aktuelleEntnahme;
+                    // Entnahme steigt mit Inflation
+                    aktuelleEntnahme = aktuelleEntnahme * (1 + inflationsRate);
+                }
+            }
+
+            // Benötigtes Kapital: Summe der abgezinsten Entnahmen
+            let benoetigtesKapital = 0;
+            let entnahmeJahr = Math.max(0, lueckeMonat) * 12;
+            for (let j = 0; j < entnahmezeitraum; j++) {
+                benoetigtesKapital += entnahmeJahr / Math.pow(1 + verzinsungsRate, j);
+                entnahmeJahr *= (1 + inflationsRate);
+            }
+
+            const vermoegenslücke = Math.max(0, benoetigtesKapital - vermoegenBeiRente);
 
             const container = document.getElementById('rentenlueckeResult');
             container.innerHTML = `
@@ -1121,11 +1159,12 @@
                         </strong>
                     </div>
                     <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
-                        Benötigtes Kapital (${entnahmezeitraum} Jahre Entnahme):
-                        <strong style="color: var(--accent-gold); font-size: 1.1rem;">${formatCurrency(benoetigtesKapital)}</strong>
+                        Vermögen bei Renteneintritt (${verzinsung}% p.a.):
+                        <strong style="color: var(--accent-emerald); font-size: 1.1rem;">${formatCurrency(vermoegenBeiRente)}</strong>
                     </div>
                     <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
-                        Bestehendes Vermögen: <strong style="color: var(--text-primary);">${formatCurrency(vermoegen)}</strong>
+                        Benötigtes Kapital (${entnahmezeitraum} J. Entnahme, ${verzinsung}% Verzinsung):
+                        <strong style="color: var(--accent-gold); font-size: 1.1rem;">${formatCurrency(benoetigtesKapital)}</strong>
                     </div>
                     <div style="font-size: 1.1rem; color: var(--text-secondary); padding-top: 1rem; border-top: 1px solid var(--border);">
                         Vermögenslücke:
@@ -1135,6 +1174,68 @@
                     </div>
                 </div>
             `;
+
+            // ── Chart rendern ──
+            const chartContainer = document.getElementById('rentenlueckeChartContainer');
+            chartContainer.style.display = 'block';
+            const ctx = document.getElementById('rentenlueckeChart').getContext('2d');
+            if (rentenlueckeChart) rentenlueckeChart.destroy();
+
+            rentenlueckeChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Vermögen',
+                            data: vermoegenVerlauf,
+                            borderColor: '#2dd4bf',
+                            backgroundColor: 'rgba(45, 212, 191, 0.15)',
+                            borderWidth: 2.5,
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 3,
+                            pointBackgroundColor: '#2dd4bf',
+                            pointBorderColor: '#0f1419',
+                            pointBorderWidth: 2
+                        },
+                        {
+                            label: 'Benötigte Monatsrente (inkl. Inflation)',
+                            data: renteVerlauf,
+                            borderColor: '#f87171',
+                            borderWidth: 2,
+                            borderDash: [6, 3],
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 3,
+                            pointBackgroundColor: '#f87171',
+                            pointBorderColor: '#0f1419',
+                            pointBorderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: true, position: 'top', labels: { color: '#f8fafc', font: { family: 'Work Sans', size: 12 }, padding: 12, usePointStyle: true, pointStyle: 'circle' } },
+                        tooltip: {
+                            backgroundColor: 'rgba(35,41,52,0.95)', titleColor: '#d4af37', bodyColor: '#f8fafc',
+                            borderColor: '#334155', borderWidth: 1, padding: 12,
+                            callbacks: {
+                                label: c => {
+                                    if (c.datasetIndex === 0) return 'Vermögen: ' + formatCurrency(c.parsed.y);
+                                    return 'Monatsrente: ' + formatCurrency(c.parsed.y);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { color: 'rgba(51,65,85,0.3)' }, ticks: { color: '#94a3b8', font: { family: 'Work Sans', size: 11 } } },
+                        y: { grid: { color: 'rgba(51,65,85,0.3)' }, ticks: { color: '#94a3b8', font: { family: 'Work Sans', size: 11 }, callback: v => formatCurrency(v) } }
+                    }
+                }
+            });
         }
 
         function exportData() {
