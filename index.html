@@ -342,21 +342,25 @@
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
                     <div style="border-left: 3px solid #8b5cf6; padding-left: 0.75rem;">
                         <div style="font-weight: 600; color: #8b5cf6; margin-bottom: 0.5rem; font-size: 0.9rem;">MLP</div>
+                        <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showMLP_Gesamt" onchange="updateChartDisplay()"><span>Gesamt</span></label>
                         <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showMLP_Konto" onchange="updateChartDisplay()"><span>Konto</span></label>
                         <label class="chart-checkbox"><input type="checkbox" id="showMLP_Depot" onchange="updateChartDisplay()"><span>Depot</span></label>
                     </div>
                     <div style="border-left: 3px solid #3b82f6; padding-left: 0.75rem;">
                         <div style="font-weight: 600; color: #3b82f6; margin-bottom: 0.5rem; font-size: 0.9rem;">Consors</div>
+                        <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showConsors_Gesamt" onchange="updateChartDisplay()"><span>Gesamt</span></label>
                         <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showConsors_Konto" onchange="updateChartDisplay()"><span>Konto</span></label>
                         <label class="chart-checkbox"><input type="checkbox" id="showConsors_Depot" onchange="updateChartDisplay()"><span>Depot</span></label>
                     </div>
                     <div style="border-left: 3px solid #10b981; padding-left: 0.75rem;">
                         <div style="font-weight: 600; color: #10b981; margin-bottom: 0.5rem; font-size: 0.9rem;">Trade Republic</div>
+                        <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showTR_Gesamt" onchange="updateChartDisplay()"><span>Gesamt</span></label>
                         <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showTR_Konto" onchange="updateChartDisplay()"><span>Konto</span></label>
                         <label class="chart-checkbox"><input type="checkbox" id="showTR_Depot" onchange="updateChartDisplay()"><span>Depot</span></label>
                     </div>
                     <div style="border-left: 3px solid #f59e0b; padding-left: 0.75rem;">
                         <div style="font-weight: 600; color: #f59e0b; margin-bottom: 0.5rem; font-size: 0.9rem;">Volksbank</div>
+                        <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showVB_Gesamt" onchange="updateChartDisplay()"><span>Gesamt</span></label>
                         <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showVB_Konto" onchange="updateChartDisplay()"><span>Konto</span></label>
                         <label class="chart-checkbox"><input type="checkbox" id="showVB_Depot" onchange="updateChartDisplay()"><span>Depot</span></label>
                     </div>
@@ -366,6 +370,7 @@
                     </div>
                     <div style="border-left: 3px solid #6366f1; padding-left: 0.75rem;">
                         <div style="font-weight: 600; color: #6366f1; margin-bottom: 0.5rem; font-size: 0.9rem;">adidas</div>
+                        <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showAdidas_Gesamt" onchange="updateChartDisplay()"><span>Gesamt</span></label>
                         <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showAdidas_Konto" onchange="updateChartDisplay()"><span>Konto</span></label>
                         <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showAdidas_Depot" onchange="updateChartDisplay()"><span>Depot</span></label>
                         <label class="chart-checkbox"><input type="checkbox" id="showAdidas_LTA" onchange="updateChartDisplay()"><span>LTA</span></label>
@@ -761,10 +766,14 @@
 
         // ── Chart ─────────────────────────────────────────────────────
         function saveChartPreferences() {
-            const ids = ['showTotal','showKonten','showDepots','showMLP_Konto','showMLP_Depot',
-                'showConsors_Konto','showConsors_Depot','showTR_Konto','showTR_Depot',
-                'showVB_Konto','showVB_Depot','showUI_Depot','showAdidas_Konto',
-                'showAdidas_Depot','showAdidas_LTA','showCoba_Depot','showAllianz_Konto',
+            const ids = ['showTotal','showKonten','showDepots',
+                'showMLP_Gesamt','showMLP_Konto','showMLP_Depot',
+                'showConsors_Gesamt','showConsors_Konto','showConsors_Depot',
+                'showTR_Gesamt','showTR_Konto','showTR_Depot',
+                'showVB_Gesamt','showVB_Konto','showVB_Depot',
+                'showUI_Depot',
+                'showAdidas_Gesamt','showAdidas_Konto','showAdidas_Depot','showAdidas_LTA',
+                'showCoba_Depot','showAllianz_Konto',
                 'showMSCI','showInflation'];
             const prefs = { showBankDetails };
             ids.forEach(id => { prefs[id] = document.getElementById(id).checked; });
@@ -871,6 +880,18 @@
                 datasets.push(line('Depots',
                     [...sorted.map(e => accounts.filter(a => a.type === 'depot' || a.type === 'lta').reduce((s, a) => s + (e[a.id] || 0), 0)), ...nf(forecastCount)],
                     '#f87171', { fill: [248, 113, 113], pointRadius: 4 }));
+
+            const bankTotals = [
+                ['showMLP_Gesamt',     'MLP Gesamt',              '#8b5cf6', ['mlp_konto', 'mlp_depot']],
+                ['showConsors_Gesamt', 'Consors Gesamt',          '#3b82f6', ['consors_konto', 'consors_depot']],
+                ['showTR_Gesamt',      'Trade Republic Gesamt',   '#10b981', ['tr_konto', 'tr_depot']],
+                ['showVB_Gesamt',      'Volksbank Gesamt',        '#f59e0b', ['vb_konto', 'vb_depot']],
+                ['showAdidas_Gesamt',  'adidas Gesamt',           '#6366f1', ['adidas_konto', 'adidas_depot', 'adidas_lta']],
+            ];
+            bankTotals.forEach(([cbId, label, color, fields]) => {
+                if (checked(cbId))
+                    datasets.push(line(label, [...sorted.map(e => fields.reduce((s, f) => s + (e[f] || 0), 0)), ...nf(forecastCount)], color, { width: 2.5, pointRadius: 4 }));
+            });
 
             const bankLines = [
                 ['showMLP_Konto',     'MLP Konto',              '#8b5cf6', 'mlp_konto',     { dash: [5,5] }],
