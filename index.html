@@ -277,6 +277,7 @@
             <button class="btn btn-primary" onclick="showAddEntryModal()">+ Neuer Eintrag</button>
             <button class="btn btn-secondary" onclick="showCompareModal()">Vergleichen</button>
             <button class="btn btn-secondary" onclick="exportData()">Export CSV</button>
+            <button class="btn btn-secondary" onclick="showRentenlueckeModal()">Rentenlücke</button>
         </div>
 
         <div style="text-align: center; font-size: 0.9rem; margin-bottom: 1rem;">
@@ -485,6 +486,49 @@
             </div>
         </div>
     </div>
+    <!-- Modal: Rentenlücke -->
+    <div class="modal" id="rentenlueckeModal">
+        <div class="modal-content" style="max-width: 700px;">
+            <h2 class="section-title">Rentenlücken-Abschätzung</h2>
+            <div class="input-section" style="margin: 0; box-shadow: none; border: none; background: transparent;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="input-group">
+                        <label>Aktuelles Alter</label>
+                        <input type="number" id="rl_alter" placeholder="30" min="18" max="80">
+                    </div>
+                    <div class="input-group">
+                        <label>Gewünschtes Rentenalter</label>
+                        <input type="number" id="rl_rentenalter" placeholder="67" min="50" max="80">
+                    </div>
+                    <div class="input-group">
+                        <label>Gewünschte Monatsrente (netto, €)</label>
+                        <input type="number" id="rl_wunschrente" placeholder="2500" step="100">
+                    </div>
+                    <div class="input-group">
+                        <label>Gesetzliche Rente lt. Bescheid (€/Monat)</label>
+                        <input type="number" id="rl_gesetzlich" placeholder="1200" step="100">
+                    </div>
+                    <div class="input-group">
+                        <label>Erwartete Rendite p.a. (%)</label>
+                        <input type="number" id="rl_rendite" placeholder="6" step="0.5" min="0" max="15">
+                    </div>
+                    <div class="input-group">
+                        <label>Entnahmedauer Rente (Jahre)</label>
+                        <input type="number" id="rl_entnahmedauer" placeholder="25" min="10" max="40">
+                    </div>
+                </div>
+                <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);">
+                    Aktuelles Vermögen wird aus dem letzten Eintrag übernommen: <strong id="rl_vermoegen_display">–</strong>
+                </div>
+                <div id="rentenlueckeResult" style="margin-top: 1.5rem;"></div>
+                <div style="margin-top: 2rem; display: flex; gap: 1rem;">
+                    <button class="btn btn-primary" onclick="berechneRentenluecke()" style="flex: 1;">Berechnen</button>
+                    <button class="btn btn-secondary" onclick="closeModal('rentenlueckeModal')">Schließen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     </div> <!-- /appContent -->
 
     <script>
@@ -1006,6 +1050,111 @@
         function clearInputs() { accounts.forEach(acc => { document.getElementById(acc.id).value = ''; }); }
         function formatCurrency(value) { return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(value); }
         function formatDate(dateStr) { return new Date(dateStr).toLocaleDateString('de-DE', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
+
+        // ── Rentenlücke ─────────────────────────────────────────────
+        function showRentenlueckeModal() {
+            const vermoegen = entries.length > 0
+                ? accounts.reduce((s, a) => s + (entries[0][a.id] || 0), 0)
+                : 0;
+            document.getElementById('rl_vermoegen_display').textContent = formatCurrency(vermoegen);
+            document.getElementById('rentenlueckeResult').innerHTML = '';
+            document.getElementById('rentenlueckeModal').classList.add('active');
+        }
+
+        function berechneRentenluecke() {
+            const alter = parseInt(document.getElementById('rl_alter').value);
+            const rentenalter = parseInt(document.getElementById('rl_rentenalter').value);
+            const wunschrente = parseFloat(document.getElementById('rl_wunschrente').value);
+            const gesetzlich = parseFloat(document.getElementById('rl_gesetzlich').value);
+            const renditePA = parseFloat(document.getElementById('rl_rendite').value) / 100;
+            const entnahmejahre = parseInt(document.getElementById('rl_entnahmedauer').value);
+
+            if (!alter || !rentenalter || !wunschrente || isNaN(gesetzlich) || !renditePA || !entnahmejahre) {
+                alert('Bitte alle Felder ausfüllen'); return;
+            }
+            if (rentenalter <= alter) { alert('Rentenalter muss größer als aktuelles Alter sein'); return; }
+
+            const jahresBisRente = rentenalter - alter;
+            const vermoegen = entries.length > 0
+                ? accounts.reduce((s, a) => s + (entries[0][a.id] || 0), 0)
+                : 0;
+
+            // Monatliche Rentenlücke
+            const lueckeMonat = Math.max(0, wunschrente - gesetzlich);
+            const lueckeJahr = lueckeMonat * 12;
+
+            // Benötigtes Kapital bei Renteneintritt (Barwert einer Rente)
+            // Entnahme mit Rendite während der Rentenphase (konservativ: halbe Rendite)
+            const entnahmeRendite = renditePA * 0.5;
+            let benoetigtesKapital;
+            if (entnahmeRendite > 0) {
+                const r = entnahmeRendite;
+                const n = entnahmejahre;
+                benoetigtesKapital = lueckeJahr * ((1 - Math.pow(1 + r, -n)) / r);
+            } else {
+                benoetigtesKapital = lueckeJahr * entnahmejahre;
+            }
+
+            // Hochrechnung des aktuellen Vermögens bis Renteneintritt
+            const vermoegenBeiRente = vermoegen * Math.pow(1 + renditePA, jahresBisRente);
+
+            // Fehlbetrag
+            const fehlbetrag = Math.max(0, benoetigtesKapital - vermoegenBeiRente);
+
+            // Monatliche Sparrate um Fehlbetrag zu schließen
+            let sparrateMonat = 0;
+            if (fehlbetrag > 0 && jahresBisRente > 0) {
+                const rMonat = renditePA / 12;
+                const nMonate = jahresBisRente * 12;
+                if (rMonat > 0) {
+                    sparrateMonat = fehlbetrag * rMonat / (Math.pow(1 + rMonat, nMonate) - 1);
+                } else {
+                    sparrateMonat = fehlbetrag / nMonate;
+                }
+            }
+
+            const fc = formatCurrency;
+            const statusClass = fehlbetrag > 0 ? 'negative' : 'positive';
+            const statusText = fehlbetrag > 0
+                ? `Es fehlen <strong>${fc(fehlbetrag)}</strong> bei Renteneintritt.`
+                : `Dein Vermögen reicht voraussichtlich aus!`;
+
+            document.getElementById('rentenlueckeResult').innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                    <div class="summary-card">
+                        <div class="summary-label">Monatliche Rentenlücke</div>
+                        <div class="summary-value ${lueckeMonat > 0 ? 'negative' : 'positive'}">${fc(lueckeMonat)}</div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">${fc(wunschrente)} − ${fc(gesetzlich)}</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Benötigtes Kapital mit ${rentenalter}</div>
+                        <div class="summary-value">${fc(benoetigtesKapital)}</div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">für ${entnahmejahre} Jahre Entnahme</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Vermögen hochgerechnet mit ${rentenalter}</div>
+                        <div class="summary-value positive">${fc(vermoegenBeiRente)}</div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">aktuell ${fc(vermoegen)} × ${jahresBisRente} Jahre × ${(renditePA * 100).toFixed(1)}%</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Fehlbetrag / Überschuss</div>
+                        <div class="summary-value ${statusClass}">${fehlbetrag > 0 ? '−' : '+'} ${fc(fehlbetrag > 0 ? fehlbetrag : vermoegenBeiRente - benoetigtesKapital)}</div>
+                    </div>
+                </div>
+                <div class="summary-card" style="text-align: center;">
+                    <div class="summary-label">Ergebnis</div>
+                    <div style="font-size: 1.1rem; margin: 0.5rem 0; color: var(--text-primary);">${statusText}</div>
+                    ${fehlbetrag > 0 ? `<div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border);">
+                        <div class="summary-label">Nötige monatliche Sparrate</div>
+                        <div class="summary-value" style="color: var(--accent-gold);">${fc(sparrateMonat)}</div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">bei ${(renditePA * 100).toFixed(1)}% Rendite über ${jahresBisRente} Jahre</div>
+                    </div>` : ''}
+                </div>
+                <div style="margin-top: 1rem; font-size: 0.75rem; color: var(--text-secondary); font-style: italic;">
+                    Hinweis: Diese Berechnung ist eine vereinfachte Abschätzung. Inflation, Steuern und Sozialabgaben sind nicht berücksichtigt. Keine Anlageberatung.
+                </div>
+            `;
+        }
 
         function exportData() {
             if (entries.length === 0) { alert('Keine Daten zum Exportieren'); return; }
