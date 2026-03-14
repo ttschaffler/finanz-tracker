@@ -399,6 +399,11 @@
                     <label>Datum</label>
                     <input type="date" id="entryDate" required>
                 </div>
+                <div id="transferDataSection" style="margin-bottom: 1rem;">
+                    <button class="btn btn-secondary" id="transferDataBtn" onclick="transferPreviousData()" style="width: 100%; padding: 0.75rem; font-size: 0.9rem; border: 1px dashed var(--accent-gold); color: var(--accent-gold); background: transparent; cursor: pointer;">
+                        &#8635; Vorherige Daten übernehmen
+                    </button>
+                </div>
                 <div class="banks-container">
                     <div class="bank-column">
                         <div class="bank-header">MLP</div>
@@ -721,6 +726,7 @@
             });
             document.getElementById('modalTitle').textContent = 'Eintrag bearbeiten – ' + formatDate(entry.date);
             document.getElementById('saveEntryBtn').textContent = 'Änderungen speichern';
+            document.getElementById('transferDataSection').style.display = 'none';
             document.getElementById('addEntryModal').classList.add('active');
         }
 
@@ -948,7 +954,18 @@
             document.getElementById('modalTitle').textContent = 'Neuer Eintrag';
             document.getElementById('saveEntryBtn').textContent = 'Speichern';
             clearInputs();
+            document.getElementById('transferDataSection').style.display = entries.length > 0 ? 'block' : 'none';
             document.getElementById('addEntryModal').classList.add('active');
+        }
+
+        function transferPreviousData() {
+            if (entries.length === 0) return;
+            const latest = entries[0];
+            accounts.forEach(acc => {
+                const val = latest[acc.id];
+                const input = document.getElementById(acc.id);
+                if (input) input.value = val ? val : '';
+            });
         }
         function showCompareModal() { document.getElementById('compareModal').classList.add('active'); document.getElementById('comparisonResult').innerHTML = ''; }
         function closeModal(id) { document.getElementById(id).classList.remove('active'); }
