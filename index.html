@@ -600,11 +600,11 @@
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
                 <div class="input-group">
-                    <label>Gesetzl. Rente brutto (monatl.)</label>
+                    <label>Gesetzl. Rente brutto bei Eintritt (monatl.)</label>
                     <input type="number" step="0.01" id="rl2_gesetzliche_rente" placeholder="1200.00">
                 </div>
                 <div class="input-group">
-                    <label>Steigerung gesetzl. Rente (% p.a.)</label>
+                    <label>Rentensteigerung im Ruhestand (% p.a.)</label>
                     <input type="number" step="0.1" id="rl2_rentensteigerung" placeholder="1.5">
                 </div>
                 <div class="input-group">
@@ -1637,8 +1637,8 @@
             const verzRate = verzinsung / 100;
             const steigRate = rentensteigerung / 100;
 
-            // Gesetzl. Rente brutto bei Renteneintritt (mit Steigerung)
-            const gesetzlichBeiRente = gesetzlichBrutto * Math.pow(1 + steigRate, jahresBisRente);
+            // Gesetzl. Rente brutto bei Renteneintritt (Eingabewert = Wert bei Renteneintritt)
+            const gesetzlichBeiRente = gesetzlichBrutto;
 
             // Besteuerungsanteil
             const bestAnteil = besteuerungsanteil(renteneintrittsjahr);
