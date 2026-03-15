@@ -1136,6 +1136,19 @@
 
             const vermoegenslücke = Math.max(0, benoetigtesKapital - vermoegenBeiRente);
 
+            // Monatliche Sparrate um Vermögenslücke zu schließen (Annuitätenformel)
+            let monatlicheSparrate = 0;
+            if (vermoegenslücke > 0 && jahresBisRente > 0) {
+                const monatsZins = verzinsungsRate / 12;
+                const monate = jahresBisRente * 12;
+                if (monatsZins > 0) {
+                    // FV = PMT × ((1+r)^n - 1) / r  →  PMT = FV × r / ((1+r)^n - 1)
+                    monatlicheSparrate = vermoegenslücke * monatsZins / (Math.pow(1 + monatsZins, monate) - 1);
+                } else {
+                    monatlicheSparrate = vermoegenslücke / monate;
+                }
+            }
+
             const container = document.getElementById('rentenlueckeResult');
             container.innerHTML = `
                 <div style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border);">
@@ -1172,6 +1185,13 @@
                             ${formatCurrency(vermoegenslücke)}
                         </strong>
                     </div>
+                    ${vermoegenslücke > 0 ? `
+                    <div style="font-size: 1.1rem; color: var(--text-secondary); margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                        Benötigte monatliche Sparrate (${jahresBisRente} J., ${verzinsung}% p.a.):
+                        <strong style="color: var(--accent-gold); font-size: 1.3rem;">
+                            ${formatCurrency(monatlicheSparrate)}
+                        </strong>
+                    </div>` : ''}
                 </div>
             `;
 
