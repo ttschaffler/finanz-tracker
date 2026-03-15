@@ -783,9 +783,9 @@
             let html = `
                 <table class="history-table">
                     <thead><tr>
-                        <th>Datum</th><th>Gesamt Konten</th><th>Gesamt Depots</th><th>Gesamtvermögen</th><th>Aktionen</th>
+                        <th>Datum</th><th>Gesamt Konten</th><th>Gesamt Depots</th><th>Gesamtvermögen</th><th>Differenz</th><th>Aktionen</th>
                     </tr></thead><tbody>`;
-            list.forEach(entry => {
+            list.forEach((entry, idx) => {
                 let totalKonto = 0, totalDepot = 0, totalLTA = 0;
                 accounts.forEach(acc => {
                     const v = entry[acc.id] || 0;
@@ -794,12 +794,26 @@
                     else if (acc.type === 'lta') totalLTA += v;
                 });
                 const total = totalKonto + totalDepot + totalLTA;
+
+                // Differenz zum vorherigen Eintrag (Liste ist neueste zuerst, also idx+1 = älter)
+                let diffHtml = '<span style="color: var(--text-secondary);">–</span>';
+                if (idx < list.length - 1) {
+                    const prev = list[idx + 1];
+                    let prevTotal = 0;
+                    accounts.forEach(acc => { prevTotal += (prev[acc.id] || 0); });
+                    const diff = total - prevTotal;
+                    const color = diff >= 0 ? 'var(--accent-emerald)' : 'var(--accent-ruby)';
+                    const prefix = diff >= 0 ? '+' : '';
+                    diffHtml = `<strong style="color: ${color};">${prefix}${formatCurrency(diff)}</strong>`;
+                }
+
                 html += `
                     <tr data-id="${entry.id}" onclick="showEntryDetails(this.dataset.id)">
                         <td>${formatDate(entry.date)}</td>
                         <td>${formatCurrency(totalKonto)}</td>
                         <td>${formatCurrency(totalDepot + totalLTA)}</td>
                         <td><strong>${formatCurrency(total)}</strong></td>
+                        <td>${diffHtml}</td>
                         <td onclick="event.stopPropagation()">
                             <button class="delete-btn" data-id="${entry.id}" onclick="deleteEntry(this.dataset.id)">Löschen</button>
                         </td>
