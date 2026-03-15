@@ -577,7 +577,7 @@
             <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem; margin-bottom: 1rem;">
                 Berechnet automatisch den Besteuerungsanteil nach Renteneintritts­jahr, die Einkommensteuer (Grundtarif 2025) sowie KV- und PV-Beiträge für Rentner.
             </p>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
                 <div class="input-group">
                     <label>Aktuelles Alter</label>
                     <input type="number" id="rl2_alter" placeholder="30" min="1" max="99">
@@ -585,6 +585,17 @@
                 <div class="input-group">
                     <label>Renteneintrittsalter</label>
                     <input type="number" id="rl2_rentenalter" placeholder="67" min="1" max="99">
+                </div>
+                <div class="input-group">
+                    <label>Familienstand</label>
+                    <select id="rl2_verheiratet" style="width: 100%; padding: 0.75rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px; font-family: 'Work Sans', sans-serif; font-size: 0.95rem;">
+                        <option value="ledig">Ledig</option>
+                        <option value="verheiratet">Verheiratet</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Anzahl Kinder</label>
+                    <input type="number" id="rl2_kinder" placeholder="0" min="0" max="20" value="0">
                 </div>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
@@ -1489,7 +1500,7 @@
 
         // ── Rentenlücke 2 – Daten speichern/laden ──────────────────
         const RL2_STORAGE_KEY = 'rentenluecke2_data';
-        const RL2_FIELDS = ['rl2_alter', 'rl2_rentenalter', 'rl2_gesetzliche_rente', 'rl2_rentensteigerung', 'rl2_betriebsrente', 'rl2_wunschrente', 'rl2_inflation', 'rl2_vermoegen', 'rl2_verzinsung', 'rl2_entnahmezeitraum'];
+        const RL2_FIELDS = ['rl2_alter', 'rl2_rentenalter', 'rl2_verheiratet', 'rl2_kinder', 'rl2_gesetzliche_rente', 'rl2_rentensteigerung', 'rl2_betriebsrente', 'rl2_wunschrente', 'rl2_inflation', 'rl2_vermoegen', 'rl2_verzinsung', 'rl2_entnahmezeitraum'];
 
         function saveRL2Data() {
             const data = {};
@@ -1541,7 +1552,7 @@
         }
 
         // Einkommensteuer Grundtarif 2025 (§ 32a EStG)
-        function einkommensteuer(zvE) {
+        function einkommensteuerGrund(zvE) {
             if (zvE <= 12084) return 0;
             if (zvE <= 17005) {
                 const y = (zvE - 12084) / 10000;
@@ -1553,6 +1564,15 @@
             }
             if (zvE <= 277825) return 0.42 * zvE - 10636.31;
             return 0.45 * zvE - 18971.06;
+        }
+
+        // Einkommensteuer mit optionalem Splittingverfahren
+        function einkommensteuer(zvE, verheiratet) {
+            if (verheiratet) {
+                // Splittingtarif: Steuer auf halbes zvE, dann verdoppeln
+                return 2 * einkommensteuerGrund(zvE / 2);
+            }
+            return einkommensteuerGrund(zvE);
         }
 
         // Solidaritätszuschlag (5,5 % der ESt, Freigrenze 18130 €)
@@ -1569,8 +1589,14 @@
         const KV_ZUSATZ_HALB = 0.0085;          // ~0,85 % (Durchschnitt 2025)
         const KV_RENTNER_SATZ = KV_ALLGEMEIN_HALB + KV_ZUSATZ_HALB; // ~8,15 %
 
-        // PV-Beitrag Rentner: voller Satz (kinderlos, ab 23 J.)
-        const PV_RENTNER_SATZ = 0.04;           // 4,0 % (2025, kinderlos)
+        // PV-Beitrag Rentner: abhängig von Kinderanzahl
+        // Kinderlos: 4,0 %; 1 Kind: 3,4 %; 2: 3,15 %; 3: 2,90 %; 4: 2,65 %; 5+: 2,40 %
+        // Abschlag für 2.–5. Kind gilt nur solange Kind < 25 J.
+        // Für Rentner vereinfacht: kinderlos vs. hat(te) Kinder (3,4 %)
+        function pvRentnerSatz(anzahlKinder) {
+            if (anzahlKinder <= 0) return 0.04;    // kinderlos
+            return 0.034;                           // hat/hatte Kinder
+        }
 
         // Betriebsrente: voller KV-Satz (Arbeitgeber+Arbeitnehmer) oberhalb Freigrenze
         const KV_BETRIEB_VOLL = 0.146 + 0.017;  // ~16,3 %
@@ -1624,36 +1650,38 @@
             const wunschNettoBeiRente = wunschrenteNetto * Math.pow(1 + inflRate, jahresBisRente);
 
             // ── Netto-Berechnung für ein gegebenes Jahr im Ruhestand ──
+            const istVerheiratet = document.getElementById('rl2_verheiratet').value === 'verheiratet';
+            const anzahlKinder = parseInt(document.getElementById('rl2_kinder').value) || 0;
+            const pvSatz = pvRentnerSatz(anzahlKinder);
+
             function berechneNetto(gesetzlBruttoMonat, betriebsBruttoMonat, entnahmeMonat, bestAnteilFix) {
                 const gesetzlJahr = gesetzlBruttoMonat * 12;
                 const betriebsJahr = betriebsBruttoMonat * 12;
 
                 // 1) Sozialabgaben auf gesetzliche Rente
                 const kvGesetzl = gesetzlJahr * KV_RENTNER_SATZ;
-                const pvGesetzl = gesetzlJahr * PV_RENTNER_SATZ;
+                const pvGesetzl = gesetzlJahr * pvSatz;
 
                 // 2) Sozialabgaben auf Betriebsrente (voller KV-Satz oberhalb Freigrenze)
                 const betriebsFreigrenze = BETRIEBSRENTE_FREIGRENZE_MONAT * 12;
                 const kvBetrieb = Math.max(0, betriebsJahr - betriebsFreigrenze) * KV_BETRIEB_VOLL;
-                const pvBetrieb = betriebsJahr * PV_RENTNER_SATZ;
+                const pvBetrieb = betriebsJahr * pvSatz;
 
                 const sozialAbgaben = kvGesetzl + pvGesetzl + kvBetrieb + pvBetrieb;
 
-                // 3) Einkommensteuer
-                // Steuerpflichtiger Anteil der gesetzlichen Rente
+                // 3) Einkommensteuer (Splitting bei Verheirateten)
                 const steuerpflGesetzl = gesetzlJahr * bestAnteilFix;
-                // Betriebsrente voll steuerpflichtig, Entnahme aus Vermögen steuerfrei (bereits versteuertes Kapital)
                 const steuerpflBetrieb = betriebsJahr;
-                const werbungskosten = 102; // Pauschale
+                const werbungskosten = 102;
                 const zvE = Math.max(0, steuerpflGesetzl + steuerpflBetrieb - werbungskosten);
-                const est = einkommensteuer(zvE);
+                const est = einkommensteuer(zvE, istVerheiratet);
                 const soli = solidaritaetszuschlag(est);
                 const steuer = est + soli;
 
                 const bruttoGesamt = gesetzlJahr + betriebsJahr + entnahmeMonat * 12;
                 const nettoGesamt = bruttoGesamt - sozialAbgaben - steuer;
 
-                return { nettoGesamt, sozialAbgaben, steuer, zvE, est, soli, kvGesetzl, pvGesetzl, kvBetrieb, pvBetrieb, bestAnteilFix, steuerpflGesetzl, steuerpflBetrieb };
+                return { nettoGesamt, sozialAbgaben, steuer, zvE, est, soli, kvGesetzl, pvGesetzl, kvBetrieb, pvBetrieb, bestAnteilFix, steuerpflGesetzl, steuerpflBetrieb, pvSatz };
             }
 
             // ── Berechnung der benötigten monatl. Entnahme im 1. Rentenjahr ──
@@ -1726,7 +1754,7 @@
             const container = document.getElementById('rl2Result');
             container.innerHTML = `
                 <div style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border);">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 2rem;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem 2rem;">
                         <div style="font-size: 0.85rem; color: var(--text-secondary);">
                             Renteneintritts­jahr: <strong style="color: var(--text-primary);">${renteneintrittsjahr}</strong> (in ${jahresBisRente} Jahren)
                         </div>
@@ -1734,10 +1762,16 @@
                             Besteuerungsanteil: <strong style="color: var(--text-primary);">${(bestAnteil * 100).toFixed(1)} %</strong>
                         </div>
                         <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                            Steuertarif: <strong style="color: var(--text-primary);">${istVerheiratet ? 'Splitting (verheiratet)' : 'Grundtarif (ledig)'}</strong>
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
                             Gesetzl. Rente brutto bei Eintritt: <strong style="color: var(--text-primary);">${formatCurrency(gesetzlichBeiRente)}</strong>
                         </div>
                         <div style="font-size: 0.85rem; color: var(--text-secondary);">
                             Betriebsrente brutto: <strong style="color: var(--text-primary);">${formatCurrency(betriebsrenteBrutto)}</strong>
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                            PV-Satz: <strong style="color: var(--text-primary);">${(pvSatz * 100).toFixed(1)} %</strong> (${anzahlKinder > 0 ? anzahlKinder + (anzahlKinder === 1 ? ' Kind' : ' Kinder') : 'kinderlos'})
                         </div>
                     </div>
 
@@ -1745,9 +1779,9 @@
                         <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">Sozialabgaben (1. Rentenjahr):</div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 2rem; font-size: 0.82rem; color: var(--text-secondary);">
                             <div>KV gesetzl. Rente (${(KV_RENTNER_SATZ * 100).toFixed(2)} %): <strong style="color: var(--text-primary);">${formatCurrency(r.kvGesetzl / 12)}/Mon.</strong></div>
-                            <div>PV gesetzl. Rente (${(PV_RENTNER_SATZ * 100).toFixed(1)} %): <strong style="color: var(--text-primary);">${formatCurrency(r.pvGesetzl / 12)}/Mon.</strong></div>
+                            <div>PV gesetzl. Rente (${(pvSatz * 100).toFixed(1)} %): <strong style="color: var(--text-primary);">${formatCurrency(r.pvGesetzl / 12)}/Mon.</strong></div>
                             <div>KV Betriebsrente (${(KV_BETRIEB_VOLL * 100).toFixed(1)} %): <strong style="color: var(--text-primary);">${formatCurrency(r.kvBetrieb / 12)}/Mon.</strong></div>
-                            <div>PV Betriebsrente (${(PV_RENTNER_SATZ * 100).toFixed(1)} %): <strong style="color: var(--text-primary);">${formatCurrency(r.pvBetrieb / 12)}/Mon.</strong></div>
+                            <div>PV Betriebsrente (${(pvSatz * 100).toFixed(1)} %): <strong style="color: var(--text-primary);">${formatCurrency(r.pvBetrieb / 12)}/Mon.</strong></div>
                             <div>Sozialabgaben gesamt: <strong style="color: var(--accent-ruby);">${formatCurrency(r.sozialAbgaben / 12)}/Mon.</strong></div>
                         </div>
                     </div>
