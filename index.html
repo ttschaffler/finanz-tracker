@@ -557,6 +557,7 @@
                 <label class="chart-checkbox"><input type="checkbox" id="rlShowVermoegen" checked onchange="updateRentenlueckeChart()"><span>Vermögen</span></label>
                 <label class="chart-checkbox"><input type="checkbox" id="rlShowBrutto" checked onchange="updateRentenlueckeChart()"><span>Monatsrente brutto</span></label>
                 <label class="chart-checkbox"><input type="checkbox" id="rlShowNetto" checked onchange="updateRentenlueckeChart()"><span>Monatsrente netto</span></label>
+                <label class="chart-checkbox"><input type="checkbox" id="rlShowGesetzlich" checked onchange="updateRentenlueckeChart()"><span>Gesetzl. Rente netto</span></label>
             </div>
             <canvas id="rentenlueckeChart"></canvas>
         </div>
@@ -1187,6 +1188,7 @@
             const vermoegenVerlauf = [];
             const renteBruttoVerlauf = [];
             const renteNettoVerlauf = [];
+            const gesetzlichNettoVerlauf = [];
             let aktuellesVermoegen = vermoegenBeiRente;
             let aktuelleEntnahmeNetto = Math.max(0, lueckeMonatNetto) * 12; // jährliche Entnahme (netto)
 
@@ -1197,8 +1199,10 @@
                 // Wunschrente brutto steigt mit Inflation, gesetzl. Rente steigt mit Rentensteigerung
                 const wunschBruttoJ = wunschrenteBruttoBeiRente * Math.pow(1 + inflationsRate, j);
                 const wunschNettoJ = wunschBruttoJ * steuerFaktor;
+                const gesetzlichNettoJ = gesetzlichBeiRente * Math.pow(1 + steigerungsRate, j) * steuerFaktor;
                 renteBruttoVerlauf.push(Math.round(wunschBruttoJ * 100) / 100);
                 renteNettoVerlauf.push(Math.round(wunschNettoJ * 100) / 100);
+                gesetzlichNettoVerlauf.push(Math.round(gesetzlichNettoJ * 100) / 100);
 
                 if (j < entnahmezeitraum) {
                     aktuellesVermoegen = aktuellesVermoegen * (1 + verzinsungsRate) - aktuelleEntnahmeNetto;
@@ -1284,7 +1288,7 @@
             `;
 
             // Chartdaten speichern für Toggle
-            rlChartData = { labels, vermoegenVerlauf, renteBruttoVerlauf, renteNettoVerlauf };
+            rlChartData = { labels, vermoegenVerlauf, renteBruttoVerlauf, renteNettoVerlauf, gesetzlichNettoVerlauf };
 
             // Chart rendern
             document.getElementById('rentenlueckeChartContainer').style.display = 'block';
@@ -1293,10 +1297,11 @@
 
         function updateRentenlueckeChart() {
             if (!rlChartData) return;
-            const { labels, vermoegenVerlauf, renteBruttoVerlauf, renteNettoVerlauf } = rlChartData;
+            const { labels, vermoegenVerlauf, renteBruttoVerlauf, renteNettoVerlauf, gesetzlichNettoVerlauf } = rlChartData;
             const showV = document.getElementById('rlShowVermoegen').checked;
             const showB = document.getElementById('rlShowBrutto').checked;
             const showN = document.getElementById('rlShowNetto').checked;
+            const showG = document.getElementById('rlShowGesetzlich').checked;
 
             const datasets = [];
             if (showV) datasets.push({
@@ -1324,9 +1329,17 @@
                 pointRadius: 3, pointBackgroundColor: '#fbbf24', pointBorderColor: '#0f1419', pointBorderWidth: 2,
                 yAxisID: 'y1'
             });
+            if (showG) datasets.push({
+                label: 'Gesetzl. Rente netto',
+                data: gesetzlichNettoVerlauf,
+                borderColor: '#a78bfa',
+                borderWidth: 2, borderDash: [3, 3], fill: false, tension: 0.3,
+                pointRadius: 3, pointBackgroundColor: '#a78bfa', pointBorderColor: '#0f1419', pointBorderWidth: 2,
+                yAxisID: 'y1'
+            });
 
             const needsY = showV;
-            const needsY1 = showB || showN;
+            const needsY1 = showB || showN || showG;
 
             const ctx = document.getElementById('rentenlueckeChart').getContext('2d');
             if (rentenlueckeChart) rentenlueckeChart.destroy();
