@@ -512,12 +512,20 @@
                     <input type="number" id="rl_rentenalter" placeholder="67" min="1" max="99">
                 </div>
                 <div class="input-group">
-                    <label>Erwartete gesetzliche Rente (monatlich, netto)</label>
+                    <label>Erwartete gesetzliche Rente (monatlich, brutto)</label>
                     <input type="number" step="0.01" id="rl_gesetzliche_rente" placeholder="1200.00">
                 </div>
                 <div class="input-group">
-                    <label>Gewünschte Monatsrente (heutiger Wert)</label>
+                    <label>Steigerung gesetzliche Rente (% p.a.)</label>
+                    <input type="number" step="0.1" id="rl_rentensteigerung" placeholder="1.5">
+                </div>
+                <div class="input-group">
+                    <label>Gewünschte Monatsrente brutto (heutiger Wert)</label>
                     <input type="number" step="0.01" id="rl_wunschrente" placeholder="2500.00">
+                </div>
+                <div class="input-group">
+                    <label>Rentensteuersatz (%)</label>
+                    <input type="number" step="0.1" id="rl_steuersatz" placeholder="20">
                 </div>
                 <div class="input-group">
                     <label>Jährliche Inflation (%)</label>
@@ -545,6 +553,11 @@
         </div>
         <div id="rentenlueckeResult" style="max-width: 900px; margin: 1.5rem auto 0;"></div>
         <div id="rentenlueckeChartContainer" style="display: none; max-width: 900px; margin: 1.5rem auto 0; background: var(--bg-card); border-radius: 20px; padding: 2rem; border: 1px solid var(--border); box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
+            <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+                <label class="chart-checkbox"><input type="checkbox" id="rlShowVermoegen" checked onchange="updateRentenlueckeChart()"><span>Vermögen</span></label>
+                <label class="chart-checkbox"><input type="checkbox" id="rlShowBrutto" checked onchange="updateRentenlueckeChart()"><span>Monatsrente brutto</span></label>
+                <label class="chart-checkbox"><input type="checkbox" id="rlShowNetto" checked onchange="updateRentenlueckeChart()"><span>Monatsrente netto</span></label>
+            </div>
             <canvas id="rentenlueckeChart"></canvas>
         </div>
     </div> <!-- /tab-rentenluecke -->
@@ -1083,7 +1096,7 @@
 
         // ── Rentenlücke Daten speichern/laden ────────────────────
         const RL_STORAGE_KEY = 'rentenluecke_data';
-        const RL_FIELDS = ['rl_alter', 'rl_rentenalter', 'rl_gesetzliche_rente', 'rl_wunschrente', 'rl_inflation', 'rl_vermoegen', 'rl_verzinsung', 'rl_entnahmezeitraum'];
+        const RL_FIELDS = ['rl_alter', 'rl_rentenalter', 'rl_gesetzliche_rente', 'rl_rentensteigerung', 'rl_wunschrente', 'rl_steuersatz', 'rl_inflation', 'rl_vermoegen', 'rl_verzinsung', 'rl_entnahmezeitraum'];
 
         function saveRentenlueckeData() {
             const data = {};
@@ -1124,18 +1137,21 @@
         }
 
         let rentenlueckeChart = null;
+        let rlChartData = null;
 
         function berechneRentenluecke() {
             const alter = parseInt(document.getElementById('rl_alter').value);
             const rentenalter = parseInt(document.getElementById('rl_rentenalter').value);
             const gesetzlich = parseFloat(document.getElementById('rl_gesetzliche_rente').value);
+            const rentensteigerung = parseFloat(document.getElementById('rl_rentensteigerung').value);
             const wunschrente = parseFloat(document.getElementById('rl_wunschrente').value);
+            const steuersatz = parseFloat(document.getElementById('rl_steuersatz').value);
             const inflation = parseFloat(document.getElementById('rl_inflation').value);
             const vermoegen = parseFloat(document.getElementById('rl_vermoegen').value) || 0;
             const verzinsung = parseFloat(document.getElementById('rl_verzinsung').value);
             const entnahmezeitraum = parseInt(document.getElementById('rl_entnahmezeitraum').value);
 
-            if (!alter || !rentenalter || isNaN(gesetzlich) || isNaN(wunschrente) || isNaN(inflation) || isNaN(verzinsung) || !entnahmezeitraum) {
+            if (!alter || !rentenalter || isNaN(gesetzlich) || isNaN(rentensteigerung) || isNaN(wunschrente) || isNaN(steuersatz) || isNaN(inflation) || isNaN(verzinsung) || !entnahmezeitraum) {
                 alert('Bitte alle Felder ausfüllen');
                 return;
             }
@@ -1147,39 +1163,52 @@
             const jahresBisRente = rentenalter - alter;
             const inflationsRate = inflation / 100;
             const verzinsungsRate = verzinsung / 100;
+            const steigerungsRate = rentensteigerung / 100;
+            const steuerFaktor = 1 - steuersatz / 100;
 
             // Vermögen wächst bis Renteneintritt mit Verzinsung
             const vermoegenBeiRente = vermoegen * Math.pow(1 + verzinsungsRate, jahresBisRente);
 
-            // Gewünschte Rente inflationsbereinigt zum Renteneintritt
-            const wunschrenteInflationsbereinigt = wunschrente * Math.pow(1 + inflationsRate, jahresBisRente);
+            // Gewünschte Rente inflationsbereinigt zum Renteneintritt (brutto)
+            const wunschrenteBruttoBeiRente = wunschrente * Math.pow(1 + inflationsRate, jahresBisRente);
 
-            // Rentenlücke pro Monat
-            const lueckeMonat = wunschrenteInflationsbereinigt - gesetzlich;
+            // Gesetzliche Rente steigt mit Rentensteigerung bis Renteneintritt
+            const gesetzlichBeiRente = gesetzlich * Math.pow(1 + steigerungsRate, jahresBisRente);
+
+            // Netto-Werte
+            const wunschrenteNettoBeiRente = wunschrenteBruttoBeiRente * steuerFaktor;
+            const gesetzlichNettoBeiRente = gesetzlichBeiRente * steuerFaktor;
+
+            // Rentenlücke netto pro Monat
+            const lueckeMonatNetto = wunschrenteNettoBeiRente - gesetzlichNettoBeiRente;
 
             // ── Verlauf ab Renteneintritt ──
             const labels = [];
             const vermoegenVerlauf = [];
-            const renteVerlauf = [];
+            const renteBruttoVerlauf = [];
+            const renteNettoVerlauf = [];
             let aktuellesVermoegen = vermoegenBeiRente;
-            let aktuelleEntnahme = Math.max(0, lueckeMonat) * 12; // jährliche Entnahme
+            let aktuelleEntnahmeNetto = Math.max(0, lueckeMonatNetto) * 12; // jährliche Entnahme (netto)
 
             for (let j = 0; j <= entnahmezeitraum; j++) {
                 labels.push(`${rentenalter + j} J.`);
                 vermoegenVerlauf.push(Math.round(aktuellesVermoegen * 100) / 100);
-                renteVerlauf.push(Math.round((wunschrenteInflationsbereinigt * Math.pow(1 + inflationsRate, j)) * 100) / 100);
+
+                // Wunschrente brutto steigt mit Inflation, gesetzl. Rente steigt mit Rentensteigerung
+                const wunschBruttoJ = wunschrenteBruttoBeiRente * Math.pow(1 + inflationsRate, j);
+                const wunschNettoJ = wunschBruttoJ * steuerFaktor;
+                renteBruttoVerlauf.push(Math.round(wunschBruttoJ * 100) / 100);
+                renteNettoVerlauf.push(Math.round(wunschNettoJ * 100) / 100);
 
                 if (j < entnahmezeitraum) {
-                    // Verzinsung auf Restvermögen, dann Entnahme
-                    aktuellesVermoegen = aktuellesVermoegen * (1 + verzinsungsRate) - aktuelleEntnahme;
-                    // Entnahme steigt mit Inflation
-                    aktuelleEntnahme = aktuelleEntnahme * (1 + inflationsRate);
+                    aktuellesVermoegen = aktuellesVermoegen * (1 + verzinsungsRate) - aktuelleEntnahmeNetto;
+                    aktuelleEntnahmeNetto = aktuelleEntnahmeNetto * (1 + inflationsRate);
                 }
             }
 
-            // Benötigtes Kapital: Summe der abgezinsten Entnahmen
+            // Benötigtes Kapital: Summe der abgezinsten Netto-Entnahmen
             let benoetigtesKapital = 0;
-            let entnahmeJahr = Math.max(0, lueckeMonat) * 12;
+            let entnahmeJahr = Math.max(0, lueckeMonatNetto) * 12;
             for (let j = 0; j < entnahmezeitraum; j++) {
                 benoetigtesKapital += entnahmeJahr / Math.pow(1 + verzinsungsRate, j);
                 entnahmeJahr *= (1 + inflationsRate);
@@ -1187,13 +1216,12 @@
 
             const vermoegenslücke = Math.max(0, benoetigtesKapital - vermoegenBeiRente);
 
-            // Monatliche Sparrate um Vermögenslücke zu schließen (Annuitätenformel)
+            // Monatliche Sparrate um Vermögenslücke zu schließen
             let monatlicheSparrate = 0;
             if (vermoegenslücke > 0 && jahresBisRente > 0) {
                 const monatsZins = verzinsungsRate / 12;
                 const monate = jahresBisRente * 12;
                 if (monatsZins > 0) {
-                    // FV = PMT × ((1+r)^n - 1) / r  →  PMT = FV × r / ((1+r)^n - 1)
                     monatlicheSparrate = vermoegenslücke * monatsZins / (Math.pow(1 + monatsZins, monate) - 1);
                 } else {
                     monatlicheSparrate = vermoegenslücke / monate;
@@ -1207,19 +1235,28 @@
                         Jahre bis zur Rente: <strong style="color: var(--text-primary);">${jahresBisRente} Jahre</strong>
                     </div>
                     <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
-                        Gewünschte Rente heute: <strong style="color: var(--text-primary);">${formatCurrency(wunschrente)}</strong>
+                        Gewünschte Rente heute (brutto): <strong style="color: var(--text-primary);">${formatCurrency(wunschrente)}</strong>
                     </div>
                     <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
-                        Gewünschte Rente bei Renteneintritt (${inflation}% Inflation p.a.):
-                        <strong style="color: var(--accent-gold);">${formatCurrency(wunschrenteInflationsbereinigt)}</strong>
+                        Gewünschte Rente bei Renteneintritt brutto (${inflation}% Inflation p.a.):
+                        <strong style="color: var(--accent-gold);">${formatCurrency(wunschrenteBruttoBeiRente)}</strong>
                     </div>
                     <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
-                        Erwartete gesetzliche Rente: <strong style="color: var(--text-primary);">${formatCurrency(gesetzlich)}</strong>
+                        Gewünschte Rente bei Renteneintritt netto (${steuersatz}% Steuer):
+                        <strong style="color: var(--accent-gold);">${formatCurrency(wunschrenteNettoBeiRente)}</strong>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Gesetzl. Rente bei Renteneintritt brutto (${rentensteigerung}% Steigerung p.a.):
+                        <strong style="color: var(--text-primary);">${formatCurrency(gesetzlichBeiRente)}</strong>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Gesetzl. Rente bei Renteneintritt netto:
+                        <strong style="color: var(--text-primary);">${formatCurrency(gesetzlichNettoBeiRente)}</strong>
                     </div>
                     <div style="font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-                        Monatliche Rentenlücke:
-                        <strong style="color: ${lueckeMonat > 0 ? 'var(--accent-ruby)' : 'var(--accent-emerald)'}; font-size: 1.3rem;">
-                            ${formatCurrency(lueckeMonat)}
+                        Monatliche Rentenlücke (netto):
+                        <strong style="color: ${lueckeMonatNetto > 0 ? 'var(--accent-ruby)' : 'var(--accent-emerald)'}; font-size: 1.3rem;">
+                            ${formatCurrency(lueckeMonatNetto)}
                         </strong>
                     </div>
                     <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
@@ -1246,45 +1283,57 @@
                 </div>
             `;
 
-            // ── Chart rendern ──
-            const chartContainer = document.getElementById('rentenlueckeChartContainer');
-            chartContainer.style.display = 'block';
+            // Chartdaten speichern für Toggle
+            rlChartData = { labels, vermoegenVerlauf, renteBruttoVerlauf, renteNettoVerlauf };
+
+            // Chart rendern
+            document.getElementById('rentenlueckeChartContainer').style.display = 'block';
+            updateRentenlueckeChart();
+        }
+
+        function updateRentenlueckeChart() {
+            if (!rlChartData) return;
+            const { labels, vermoegenVerlauf, renteBruttoVerlauf, renteNettoVerlauf } = rlChartData;
+            const showV = document.getElementById('rlShowVermoegen').checked;
+            const showB = document.getElementById('rlShowBrutto').checked;
+            const showN = document.getElementById('rlShowNetto').checked;
+
+            const datasets = [];
+            if (showV) datasets.push({
+                label: 'Vermögen',
+                data: vermoegenVerlauf,
+                borderColor: '#2dd4bf',
+                backgroundColor: 'rgba(45, 212, 191, 0.15)',
+                borderWidth: 2.5, fill: true, tension: 0.3,
+                pointRadius: 3, pointBackgroundColor: '#2dd4bf', pointBorderColor: '#0f1419', pointBorderWidth: 2,
+                yAxisID: 'y'
+            });
+            if (showB) datasets.push({
+                label: 'Monatsrente brutto',
+                data: renteBruttoVerlauf,
+                borderColor: '#f87171',
+                borderWidth: 2, borderDash: [6, 3], fill: false, tension: 0.3,
+                pointRadius: 3, pointBackgroundColor: '#f87171', pointBorderColor: '#0f1419', pointBorderWidth: 2,
+                yAxisID: 'y1'
+            });
+            if (showN) datasets.push({
+                label: 'Monatsrente netto',
+                data: renteNettoVerlauf,
+                borderColor: '#fbbf24',
+                borderWidth: 2, fill: false, tension: 0.3,
+                pointRadius: 3, pointBackgroundColor: '#fbbf24', pointBorderColor: '#0f1419', pointBorderWidth: 2,
+                yAxisID: 'y1'
+            });
+
+            const needsY = showV;
+            const needsY1 = showB || showN;
+
             const ctx = document.getElementById('rentenlueckeChart').getContext('2d');
             if (rentenlueckeChart) rentenlueckeChart.destroy();
 
             rentenlueckeChart = new Chart(ctx, {
                 type: 'line',
-                data: {
-                    labels,
-                    datasets: [
-                        {
-                            label: 'Vermögen',
-                            data: vermoegenVerlauf,
-                            borderColor: '#2dd4bf',
-                            backgroundColor: 'rgba(45, 212, 191, 0.15)',
-                            borderWidth: 2.5,
-                            fill: true,
-                            tension: 0.3,
-                            pointRadius: 3,
-                            pointBackgroundColor: '#2dd4bf',
-                            pointBorderColor: '#0f1419',
-                            pointBorderWidth: 2
-                        },
-                        {
-                            label: 'Benötigte Monatsrente (inkl. Inflation)',
-                            data: renteVerlauf,
-                            borderColor: '#f87171',
-                            borderWidth: 2,
-                            borderDash: [6, 3],
-                            fill: false,
-                            tension: 0.3,
-                            pointRadius: 3,
-                            pointBackgroundColor: '#f87171',
-                            pointBorderColor: '#0f1419',
-                            pointBorderWidth: 2
-                        }
-                    ]
-                },
+                data: { labels, datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: true,
@@ -1293,17 +1342,25 @@
                         tooltip: {
                             backgroundColor: 'rgba(35,41,52,0.95)', titleColor: '#d4af37', bodyColor: '#f8fafc',
                             borderColor: '#334155', borderWidth: 1, padding: 12,
-                            callbacks: {
-                                label: c => {
-                                    if (c.datasetIndex === 0) return 'Vermögen: ' + formatCurrency(c.parsed.y);
-                                    return 'Monatsrente: ' + formatCurrency(c.parsed.y);
-                                }
-                            }
+                            callbacks: { label: c => c.dataset.label + ': ' + formatCurrency(c.parsed.y) }
                         }
                     },
                     scales: {
                         x: { grid: { color: 'rgba(51,65,85,0.3)' }, ticks: { color: '#94a3b8', font: { family: 'Work Sans', size: 11 } } },
-                        y: { grid: { color: 'rgba(51,65,85,0.3)' }, ticks: { color: '#94a3b8', font: { family: 'Work Sans', size: 11 }, callback: v => formatCurrency(v) } }
+                        y: {
+                            display: needsY,
+                            position: 'left',
+                            title: { display: needsY, text: 'Vermögen', color: '#2dd4bf', font: { family: 'Work Sans', size: 12 } },
+                            grid: { color: 'rgba(51,65,85,0.3)' },
+                            ticks: { color: '#2dd4bf', font: { family: 'Work Sans', size: 11 }, callback: v => formatCurrency(v) }
+                        },
+                        y1: {
+                            display: needsY1,
+                            position: 'right',
+                            title: { display: needsY1, text: 'Monatsrente', color: '#f87171', font: { family: 'Work Sans', size: 12 } },
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: '#f87171', font: { family: 'Work Sans', size: 11 }, callback: v => formatCurrency(v) }
+                        }
                     }
                 }
             });
