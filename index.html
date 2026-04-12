@@ -601,31 +601,81 @@
         const db   = firebase.firestore();
         const auth = firebase.auth();
 
-        let entriesCol = null;
-        let currentUser = null;
-        let entries = [];
-        let currentEditingEntryId = null;
-        let showBankDetails = false;
-        let activeTimeRange = 'all';
-        let wealthChart = null;
-        const PREFS_KEY = 'chart_preferences';
-
-        const accounts = [
-            { id: 'mlp_konto',     label: 'MLP Konto',               type: 'konto' },
-            { id: 'mlp_depot',     label: 'MLP Depot',               type: 'depot' },
-            { id: 'consors_konto', label: 'Consors Konto',           type: 'konto' },
-            { id: 'consors_depot', label: 'Consors Depot',           type: 'depot' },
-            { id: 'tr_konto',      label: 'Trade Republic Konto',    type: 'konto' },
-            { id: 'tr_depot',      label: 'Trade Republic Depot',    type: 'depot' },
-            { id: 'vb_konto',      label: 'Volksbank Konto',         type: 'konto' },
-            { id: 'vb_depot',      label: 'Volksbank Depot',         type: 'depot' },
-            { id: 'ui_depot',      label: 'Union Investment Depot',  type: 'depot' },
-            { id: 'adidas_konto',  label: 'adidas Konto',            type: 'konto' },
-            { id: 'adidas_depot',  label: 'adidas Depot',            type: 'depot' },
-            { id: 'adidas_lta',    label: 'adidas LTA',              type: 'lta'   },
-            { id: 'coba_depot',    label: 'Commerzbank Depot',       type: 'depot' },
-            { id: 'allianz_konto', label: 'Allianz Riester Konto',   type: 'konto' }
+        // ── Bank Registry (OCP: add a bank here, everything else follows) ──
+        const BANKS = [
+            { prefix: 'mlp',     label: 'MLP',              cbPrefix: 'MLP',     color: '#8b5cf6', accounts: [{ suffix: 'konto', label: 'Konto' }, { suffix: 'depot', label: 'Depot' }] },
+            { prefix: 'consors', label: 'Consors',           cbPrefix: 'Consors', color: '#3b82f6', accounts: [{ suffix: 'konto', label: 'Konto' }, { suffix: 'depot', label: 'Depot' }] },
+            { prefix: 'tr',      label: 'Trade Republic',    cbPrefix: 'TR',      color: '#10b981', accounts: [{ suffix: 'konto', label: 'Konto' }, { suffix: 'depot', label: 'Depot' }] },
+            { prefix: 'vb',      label: 'Volksbank',         cbPrefix: 'VB',      color: '#f59e0b', accounts: [{ suffix: 'konto', label: 'Konto' }, { suffix: 'depot', label: 'Depot' }] },
+            { prefix: 'ui',      label: 'Union Investment',  cbPrefix: 'UI',      color: '#ec4899', accounts: [{ suffix: 'depot', label: 'Depot' }] },
+            { prefix: 'adidas',  label: 'adidas',            cbPrefix: 'Adidas',  color: '#6366f1', accounts: [{ suffix: 'konto', label: 'Konto' }, { suffix: 'depot', label: 'Depot' }, { suffix: 'lta', label: 'LTA' }] },
+            { prefix: 'coba',    label: 'Commerzbank',       cbPrefix: 'Coba',    color: '#14b8a6', accounts: [{ suffix: 'depot', label: 'Depot' }] },
+            { prefix: 'allianz', label: 'Allianz Riester',   cbPrefix: 'Allianz', color: '#e11d48', accounts: [{ suffix: 'konto', label: 'Konto' }] }
         ];
+
+        // Derived flat accounts list (from registry)
+        const accounts = BANKS.flatMap(bank =>
+            bank.accounts.map(acc => ({
+                id: `${bank.prefix}_${acc.suffix}`,
+                label: `${bank.label} ${acc.label}`,
+                type: acc.suffix === 'lta' ? 'lta' : acc.suffix,
+                bankPrefix: bank.prefix
+            }))
+        );
+
+        // ── Time Range Config (OCP) ──────────────────────────────
+        const TIME_RANGES = [
+            { key: '3m', label: '3M', months: 3 },
+            { key: '6m', label: '6M', months: 6 },
+            { key: '1y', label: '1J', years: 1 },
+            { key: '3y', label: '3J', years: 3 },
+            { key: 'all', label: 'Alles' }
+        ];
+
+        // ── Formatter (DIP: wraps locale-specific formatting) ────
+        const Formatter = {
+            currency(value) { return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(value); },
+            currencyShort(value) { return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value); },
+            date(dateStr) { return new Date(dateStr).toLocaleDateString('de-DE', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
+        };
+        // Keep global aliases for onclick handlers in HTML
+        function formatCurrency(value) { return Formatter.currency(value); }
+        function formatDate(dateStr) { return Formatter.date(dateStr); }
+
+        // ── Storage (DIP: wraps localStorage) ────────────────────
+        const Storage = {
+            get(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } },
+            set(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
+        };
+
+        // ── DataStore (DIP: wraps Firebase) ──────────────────────
+        const DataStore = {
+            collection: null,
+            init(col) { this.collection = col; },
+            listen(onData, onError) {
+                return this.collection.orderBy('date', 'desc').onSnapshot(
+                    snapshot => onData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                    error => onError(error)
+                );
+            },
+            async add(data) { return this.collection.add(data); },
+            async update(id, data) { return this.collection.doc(id).update(data); },
+            async remove(id) { return this.collection.doc(id).delete(); }
+        };
+
+        // ── AppState (DIP: encapsulates global mutable state) ────
+        const AppState = {
+            entries: [],
+            currentUser: null,
+            currentEditingEntryId: null,
+            showBankDetails: false,
+            activeTimeRange: 'all',
+            wealthChart: null,
+            rl2Chart: null,
+            rl2ChartData: null
+        };
+
+        const PREFS_KEY = 'chart_preferences';
 
         // ── Auth ──────────────────────────────────────────────────────
         function signInWithGoogle() {
@@ -639,8 +689,8 @@
 
         auth.onAuthStateChanged(user => {
             if (user) {
-                currentUser  = user;
-                entriesCol   = db.collection('users').doc(user.uid).collection('entries');
+                AppState.currentUser = user;
+                DataStore.init(db.collection('users').doc(user.uid).collection('entries'));
                 document.getElementById('loginScreen').style.display  = 'none';
                 document.getElementById('appContent').style.display   = 'block';
                 document.getElementById('headerUser').innerHTML =
@@ -650,9 +700,9 @@
                 loadChartPreferences();
                 initFirebase();
             } else {
-                currentUser  = null;
-                entriesCol   = null;
-                entries      = [];
+                AppState.currentUser = null;
+                DataStore.collection = null;
+                AppState.entries = [];
                 document.getElementById('loginScreen').style.display  = 'flex';
                 document.getElementById('appContent').style.display   = 'none';
             }
@@ -661,9 +711,9 @@
         // ── Firebase real-time listener ───────────────────────────────
         function initFirebase() {
             setStatus('connecting');
-            entriesCol.orderBy('date', 'desc').onSnapshot(
-                (snapshot) => {
-                    entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            DataStore.listen(
+                (data) => {
+                    AppState.entries = data;
                     setStatus('connected');
                     refreshDisplay();
                 },
@@ -675,7 +725,7 @@
         }
 
         function setTimeRange(range) {
-            activeTimeRange = range;
+            AppState.activeTimeRange = range;
             document.querySelectorAll('.time-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.range === range);
             });
@@ -685,13 +735,13 @@
         }
 
         function getFilteredEntries() {
-            if (activeTimeRange === 'all') return entries;
+            if (AppState.activeTimeRange === 'all') return AppState.entries;
+            const config = TIME_RANGES.find(r => r.key === AppState.activeTimeRange);
+            if (!config) return AppState.entries;
             const cutoff = new Date();
-            if      (activeTimeRange === '3m') cutoff.setMonth(cutoff.getMonth() - 3);
-            else if (activeTimeRange === '6m') cutoff.setMonth(cutoff.getMonth() - 6);
-            else if (activeTimeRange === '1y') cutoff.setFullYear(cutoff.getFullYear() - 1);
-            else if (activeTimeRange === '3y') cutoff.setFullYear(cutoff.getFullYear() - 3);
-            return entries.filter(e => new Date(e.date) >= cutoff);
+            if (config.months) cutoff.setMonth(cutoff.getMonth() - config.months);
+            if (config.years) cutoff.setFullYear(cutoff.getFullYear() - config.years);
+            return AppState.entries.filter(e => new Date(e.date) >= cutoff);
         }
 
         function setStatus(state, msg) {
@@ -704,19 +754,29 @@
         }
 
         // ── Save / delete ─────────────────────────────────────────────
-        async function saveEntry() {
+        function buildEntryFromForm() {
             const date = document.getElementById('entryDate').value;
-            if (!date) { alert('Bitte ein Datum eingeben'); return; }
-            const entryData = { date };
+            if (!date) return null;
+            const data = { date };
             accounts.forEach(acc => {
-                entryData[acc.id] = parseFloat(document.getElementById(acc.id).value) || 0;
+                data[acc.id] = parseFloat(document.getElementById(acc.id).value) || 0;
             });
+            return data;
+        }
+
+        async function persistEntry(data, editId) {
+            if (editId) {
+                await DataStore.update(editId, data);
+            } else {
+                await DataStore.add(data);
+            }
+        }
+
+        async function saveEntry() {
+            const entryData = buildEntryFromForm();
+            if (!entryData) { alert('Bitte ein Datum eingeben'); return; }
             try {
-                if (currentEditingEntryId) {
-                    await entriesCol.doc(currentEditingEntryId).update(entryData);
-                } else {
-                    await entriesCol.add(entryData);
-                }
+                await persistEntry(entryData, AppState.currentEditingEntryId);
                 closeModal('addEntryModal');
                 clearInputs();
             } catch (err) {
@@ -727,18 +787,40 @@
         async function deleteEntry(id) {
             if (!confirm('Eintrag wirklich löschen?')) return;
             try {
-                await entriesCol.doc(id).delete();
+                await DataStore.remove(id);
             } catch (err) {
                 alert('Fehler beim Löschen: ' + err.message);
             }
         }
 
+        // ── Pure Business Logic ───────────────────────────────────────
+        function calculateTotals(entry) {
+            let konten = 0, depots = 0;
+            accounts.forEach(acc => {
+                const v = entry[acc.id] || 0;
+                if (acc.type === 'konto') konten += v;
+                else depots += v;
+            });
+            return { total: konten + depots, konten, depots };
+        }
+
+        function formatChangeValue(newVal, oldVal) {
+            const diff = newVal - oldVal;
+            const pct = oldVal !== 0 ? (diff / oldVal) * 100 : 0;
+            const s = diff >= 0 ? '+' : '';
+            const ps = pct >= 0 ? '+' : '';
+            return {
+                html: `${s}${Formatter.currency(diff).replace('€', '€ ')}<br><span style="font-size:1.2rem;opacity:0.8;">${ps}${pct.toFixed(2)}%</span>`,
+                cssClass: 'summary-value ' + (diff >= 0 ? 'positive' : 'negative')
+            };
+        }
+
         // ── Display ───────────────────────────────────────────────────
         function refreshDisplay() {
             const filtered = getFilteredEntries();
-            updateSummary(entries);
+            updateSummary(AppState.entries);
             displayHistory(filtered);
-            updateCompareSelects(entries);
+            updateCompareSelects(AppState.entries);
             renderChart(filtered);
         }
 
@@ -748,38 +830,50 @@
                 ['recentChangeValue','totalChangeValue'].forEach(id => { document.getElementById(id).textContent = '-'; });
                 return;
             }
-            const latest = list[0];
-            let totalKonto = 0, totalDepot = 0, totalLTA = 0;
-            accounts.forEach(acc => {
-                const v = latest[acc.id] || 0;
-                if (acc.type === 'konto') totalKonto += v;
-                else if (acc.type === 'depot') totalDepot += v;
-                else if (acc.type === 'lta') totalLTA += v;
-            });
-            const total = totalKonto + totalDepot + totalLTA;
-            document.getElementById('totalValue').textContent    = formatCurrency(total);
-            document.getElementById('totalAccounts').textContent = formatCurrency(totalKonto);
-            document.getElementById('totalDepots').textContent   = formatCurrency(totalDepot + totalLTA);
-
-            function setChange(elId, newVal, oldVal) {
-                const el   = document.getElementById(elId);
-                const diff = newVal - oldVal;
-                const pct  = oldVal !== 0 ? (diff / oldVal) * 100 : 0;
-                const s    = diff >= 0 ? '+' : '';
-                const ps   = pct  >= 0 ? '+' : '';
-                el.innerHTML = `${s}${formatCurrency(diff).replace('€', '€ ')}<br><span style="font-size:1.2rem;opacity:0.8;">${ps}${pct.toFixed(2)}%</span>`;
-                el.className = 'summary-value ' + (diff >= 0 ? 'positive' : 'negative');
-            }
+            const { total, konten, depots } = calculateTotals(list[0]);
+            document.getElementById('totalValue').textContent    = Formatter.currency(total);
+            document.getElementById('totalAccounts').textContent = Formatter.currency(konten);
+            document.getElementById('totalDepots').textContent   = Formatter.currency(depots);
 
             if (list.length > 1) {
-                const prevTotal = accounts.reduce((s, a) => s + (list[1][a.id] || 0), 0);
-                setChange('recentChangeValue', total, prevTotal);
-                const oldTotal = accounts.reduce((s, a) => s + (list[list.length - 1][a.id] || 0), 0);
-                setChange('totalChangeValue', total, oldTotal);
+                const prevTotal = calculateTotals(list[1]).total;
+                const recent = formatChangeValue(total, prevTotal);
+                const el1 = document.getElementById('recentChangeValue');
+                el1.innerHTML = recent.html;
+                el1.className = recent.cssClass;
+
+                const oldTotal = calculateTotals(list[list.length - 1]).total;
+                const overall = formatChangeValue(total, oldTotal);
+                const el2 = document.getElementById('totalChangeValue');
+                el2.innerHTML = overall.html;
+                el2.className = overall.cssClass;
             } else {
                 document.getElementById('recentChangeValue').textContent = '-';
                 document.getElementById('totalChangeValue').textContent  = '-';
             }
+        }
+
+        function buildHistoryRow(entry, prevEntry) {
+            const { total, konten, depots } = calculateTotals(entry);
+            let diffHtml = '<span style="color: var(--text-secondary);">–</span>';
+            if (prevEntry) {
+                const prevTotal = calculateTotals(prevEntry).total;
+                const diff = total - prevTotal;
+                const color = diff >= 0 ? 'var(--accent-emerald)' : 'var(--accent-ruby)';
+                const prefix = diff >= 0 ? '+' : '';
+                diffHtml = `<strong style="color: ${color};">${prefix}${Formatter.currency(diff)}</strong>`;
+            }
+            return `
+                <tr data-id="${entry.id}" onclick="showEntryDetails(this.dataset.id)">
+                    <td>${Formatter.date(entry.date)}</td>
+                    <td>${Formatter.currency(konten)}</td>
+                    <td>${Formatter.currency(depots)}</td>
+                    <td><strong>${Formatter.currency(total)}</strong></td>
+                    <td>${diffHtml}</td>
+                    <td onclick="event.stopPropagation()">
+                        <button class="delete-btn" data-id="${entry.id}" onclick="deleteEntry(this.dataset.id)">Löschen</button>
+                    </td>
+                </tr>`;
         }
 
         function displayHistory(list) {
@@ -799,62 +893,38 @@
                         <th>Datum</th><th>Gesamt Konten</th><th>Gesamt Depots</th><th>Gesamtvermögen</th><th>Differenz</th><th>Aktionen</th>
                     </tr></thead><tbody>`;
             list.forEach((entry, idx) => {
-                let totalKonto = 0, totalDepot = 0, totalLTA = 0;
-                accounts.forEach(acc => {
-                    const v = entry[acc.id] || 0;
-                    if (acc.type === 'konto') totalKonto += v;
-                    else if (acc.type === 'depot') totalDepot += v;
-                    else if (acc.type === 'lta') totalLTA += v;
-                });
-                const total = totalKonto + totalDepot + totalLTA;
-
-                // Differenz zum vorherigen Eintrag (Liste ist neueste zuerst, also idx+1 = älter)
-                let diffHtml = '<span style="color: var(--text-secondary);">–</span>';
-                if (idx < list.length - 1) {
-                    const prev = list[idx + 1];
-                    let prevTotal = 0;
-                    accounts.forEach(acc => { prevTotal += (prev[acc.id] || 0); });
-                    const diff = total - prevTotal;
-                    const color = diff >= 0 ? 'var(--accent-emerald)' : 'var(--accent-ruby)';
-                    const prefix = diff >= 0 ? '+' : '';
-                    diffHtml = `<strong style="color: ${color};">${prefix}${formatCurrency(diff)}</strong>`;
-                }
-
-                html += `
-                    <tr data-id="${entry.id}" onclick="showEntryDetails(this.dataset.id)">
-                        <td>${formatDate(entry.date)}</td>
-                        <td>${formatCurrency(totalKonto)}</td>
-                        <td>${formatCurrency(totalDepot + totalLTA)}</td>
-                        <td><strong>${formatCurrency(total)}</strong></td>
-                        <td>${diffHtml}</td>
-                        <td onclick="event.stopPropagation()">
-                            <button class="delete-btn" data-id="${entry.id}" onclick="deleteEntry(this.dataset.id)">Löschen</button>
-                        </td>
-                    </tr>`;
+                html += buildHistoryRow(entry, idx < list.length - 1 ? list[idx + 1] : null);
             });
             html += '</tbody></table>';
             container.innerHTML = html;
         }
 
-        function showEntryDetails(entryId) {
-            const entry = entries.find(e => e.id === entryId);
-            if (!entry) return;
-            currentEditingEntryId = entryId;
+        function populateEntryForm(entry) {
             document.getElementById('entryDate').value = entry.date;
             accounts.forEach(acc => {
                 const input = document.getElementById(acc.id);
                 if (input) input.value = entry[acc.id] || '';
             });
-            document.getElementById('modalTitle').textContent = 'Eintrag bearbeiten – ' + formatDate(entry.date);
+        }
+
+        function showEditEntryModal(entryId) {
+            const entry = AppState.entries.find(e => e.id === entryId);
+            if (!entry) return;
+            AppState.currentEditingEntryId = entryId;
+            populateEntryForm(entry);
+            document.getElementById('modalTitle').textContent = 'Eintrag bearbeiten – ' + Formatter.date(entry.date);
             document.getElementById('saveEntryBtn').textContent = 'Änderungen speichern';
             document.getElementById('copyPreviousBtn').style.display = 'none';
             document.querySelectorAll('.copy-bank-btn').forEach(b => b.style.display = 'none');
             document.getElementById('addEntryModal').classList.add('active');
         }
 
+        // Keep old name as alias for onclick handlers
+        function showEntryDetails(entryId) { showEditEntryModal(entryId); }
+
         function updateCompareSelects(list) {
             let options = '<option value="">Bitte wählen...</option>';
-            list.forEach(e => { options += `<option value="${e.id}">${formatDate(e.date)}</option>`; });
+            list.forEach(e => { options += `<option value="${e.id}">${Formatter.date(e.date)}</option>`; });
             document.getElementById('compare1').innerHTML = options;
             document.getElementById('compare2').innerHTML = options;
         }
@@ -863,58 +933,62 @@
             const id1 = document.getElementById('compare1').value;
             const id2 = document.getElementById('compare2').value;
             if (!id1 || !id2) { alert('Bitte beide Einträge auswählen'); return; }
-            const e1 = entries.find(e => e.id === id1);
-            const e2 = entries.find(e => e.id === id2);
+            const e1 = AppState.entries.find(e => e.id === id1);
+            const e2 = AppState.entries.find(e => e.id === id2);
             if (!e1 || !e2) { alert('Einträge nicht gefunden'); return; }
             let html = `<div style="overflow-x:auto;"><table class="history-table">
-                <thead><tr><th>Konto</th><th>${formatDate(e1.date)}</th><th>${formatDate(e2.date)}</th><th>Differenz</th></tr></thead><tbody>`;
+                <thead><tr><th>Konto</th><th>${Formatter.date(e1.date)}</th><th>${Formatter.date(e2.date)}</th><th>Differenz</th></tr></thead><tbody>`;
             accounts.forEach(acc => {
                 const v1 = e1[acc.id] || 0, v2 = e2[acc.id] || 0, diff = v2 - v1;
-                html += `<tr><td>${acc.label}</td><td>${formatCurrency(v1)}</td><td>${formatCurrency(v2)}</td>
-                    <td class="${diff >= 0 ? 'positive' : 'negative'}" style="font-weight:600;">${formatCurrency(diff)}</td></tr>`;
+                html += `<tr><td>${acc.label}</td><td>${Formatter.currency(v1)}</td><td>${Formatter.currency(v2)}</td>
+                    <td class="${diff >= 0 ? 'positive' : 'negative'}" style="font-weight:600;">${Formatter.currency(diff)}</td></tr>`;
             });
             html += '</tbody></table></div>';
             document.getElementById('comparisonResult').innerHTML = html;
         }
 
         // ── Chart ─────────────────────────────────────────────────────
+        // ── Chart Preferences (OCP: derived from bank registry) ─────
+        function getChartCheckboxIds() {
+            const ids = ['showTotal', 'showKonten', 'showDepots', 'showMSCI', 'showInflation'];
+            BANKS.forEach(bank => {
+                if (bank.accounts.length > 1) ids.push(`show${bank.cbPrefix}_Gesamt`);
+                bank.accounts.forEach(acc => {
+                    ids.push(`show${bank.cbPrefix}_${acc.suffix === 'lta' ? 'LTA' : acc.label}`);
+                });
+            });
+            return ids;
+        }
+
         function saveChartPreferences() {
-            const ids = ['showTotal','showKonten','showDepots',
-                'showMLP_Gesamt','showMLP_Konto','showMLP_Depot',
-                'showConsors_Gesamt','showConsors_Konto','showConsors_Depot',
-                'showTR_Gesamt','showTR_Konto','showTR_Depot',
-                'showVB_Gesamt','showVB_Konto','showVB_Depot',
-                'showUI_Depot',
-                'showAdidas_Gesamt','showAdidas_Konto','showAdidas_Depot','showAdidas_LTA',
-                'showCoba_Depot','showAllianz_Konto',
-                'showMSCI','showInflation'];
-            const prefs = { showBankDetails };
-            ids.forEach(id => { prefs[id] = document.getElementById(id).checked; });
-            localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+            const ids = getChartCheckboxIds();
+            const prefs = { showBankDetails: AppState.showBankDetails };
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) prefs[id] = el.checked;
+            });
+            Storage.set(PREFS_KEY, prefs);
         }
 
         function loadChartPreferences() {
-            const saved = localStorage.getItem(PREFS_KEY);
-            if (!saved) return;
-            try {
-                const prefs = JSON.parse(saved);
-                const defaults = { showTotal: true, showKonten: true, showDepots: true };
-                Object.entries(prefs).forEach(([k, v]) => {
-                    const el = document.getElementById(k);
-                    if (el) el.checked = v ?? (defaults[k] ?? false);
-                });
-                showBankDetails = prefs.showBankDetails ?? false;
-                if (showBankDetails) {
-                    document.getElementById('bankCheckboxes').style.display = 'block';
-                    document.getElementById('bankToggleText').textContent = '- Einzelne Banken';
-                }
-            } catch (e) { console.error('Error loading preferences:', e); }
+            const prefs = Storage.get(PREFS_KEY);
+            if (!prefs) return;
+            const defaults = { showTotal: true, showKonten: true, showDepots: true };
+            Object.entries(prefs).forEach(([k, v]) => {
+                const el = document.getElementById(k);
+                if (el) el.checked = v ?? (defaults[k] ?? false);
+            });
+            AppState.showBankDetails = prefs.showBankDetails ?? false;
+            if (AppState.showBankDetails) {
+                document.getElementById('bankCheckboxes').style.display = 'block';
+                document.getElementById('bankToggleText').textContent = '- Einzelne Banken';
+            }
         }
 
         function toggleBankDetails() {
-            showBankDetails = !showBankDetails;
-            document.getElementById('bankCheckboxes').style.display = showBankDetails ? 'block' : 'none';
-            document.getElementById('bankToggleText').textContent = showBankDetails ? '- Einzelne Banken' : '+ Einzelne Banken';
+            AppState.showBankDetails = !AppState.showBankDetails;
+            document.getElementById('bankCheckboxes').style.display = AppState.showBankDetails ? 'block' : 'none';
+            document.getElementById('bankToggleText').textContent = AppState.showBankDetails ? '- Einzelne Banken' : '+ Einzelne Banken';
             saveChartPreferences();
         }
 
@@ -923,7 +997,7 @@
         function renderChart(list) {
             const canvas = document.getElementById('wealthChart');
             const ctx = canvas.getContext('2d');
-            if (wealthChart) { wealthChart.destroy(); }
+            if (AppState.wealthChart) { AppState.wealthChart.destroy(); }
             if (list.length === 0) return;
 
             const sorted = [...list].reverse();
@@ -1060,7 +1134,7 @@
                 }
             };
 
-            wealthChart = new Chart(ctx, {
+            AppState.wealthChart = new Chart(ctx, {
                 type: 'line',
                 data: { labels, datasets },
                 plugins: showForecast ? [dividerPlugin] : [],
@@ -1079,7 +1153,7 @@
                     },
                     scales: {
                         x: { grid: { color: 'rgba(51,65,85,0.3)', drawBorder: false }, ticks: { color: '#94a3b8', font: { family: 'Work Sans', size: 11 }, maxTicksLimit: 16 } },
-                        y: { grid: { color: 'rgba(51,65,85,0.3)', drawBorder: false }, ticks: { color: '#94a3b8', font: { family: 'Work Sans', size: 11 }, callback: v => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v) } }
+                        y: { grid: { color: 'rgba(51,65,85,0.3)', drawBorder: false }, ticks: { color: '#94a3b8', font: { family: 'Work Sans', size: 11 }, callback: v => Formatter.currencyShort(v) } }
                     }
                 }
             });
@@ -1087,7 +1161,7 @@
 
         // ── Modals ────────────────────────────────────────────────────
         function showAddEntryModal() {
-            currentEditingEntryId = null;
+            AppState.currentEditingEntryId = null;
             document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('modalTitle').textContent = 'Neuer Eintrag';
             document.getElementById('saveEntryBtn').textContent = 'Speichern';
@@ -1097,16 +1171,16 @@
             document.getElementById('addEntryModal').classList.add('active');
         }
         function copyPreviousEntry() {
-            if (entries.length === 0) { alert('Keine vorherigen Einträge vorhanden'); return; }
-            const latest = entries[0];
+            if (AppState.entries.length === 0) { alert('Keine vorherigen Einträge vorhanden'); return; }
+            const latest = AppState.entries[0];
             accounts.forEach(acc => {
                 const val = latest[acc.id];
                 document.getElementById(acc.id).value = val ? val : '';
             });
         }
         function copyPreviousBank(prefix) {
-            if (entries.length === 0) { alert('Keine vorherigen Einträge vorhanden'); return; }
-            const latest = entries[0];
+            if (AppState.entries.length === 0) { alert('Keine vorherigen Einträge vorhanden'); return; }
+            const latest = AppState.entries[0];
             accounts.filter(acc => acc.id.startsWith(prefix + '_')).forEach(acc => {
                 const val = latest[acc.id];
                 document.getElementById(acc.id).value = val ? val : '';
@@ -1117,8 +1191,6 @@
 
         // ── Helpers ───────────────────────────────────────────────────
         function clearInputs() { accounts.forEach(acc => { document.getElementById(acc.id).value = ''; }); }
-        function formatCurrency(value) { return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(value); }
-        function formatDate(dateStr) { return new Date(dateStr).toLocaleDateString('de-DE', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
 
         // ── Tab Navigation ───────────────────────────────────────
         function switchTab(tabName) {
@@ -1136,20 +1208,17 @@
         function saveRL2Data() {
             const data = {};
             RL2_FIELDS.forEach(id => { data[id] = document.getElementById(id).value; });
-            localStorage.setItem(RL2_STORAGE_KEY, JSON.stringify(data));
+            Storage.set(RL2_STORAGE_KEY, data);
         }
 
         function loadRL2Data() {
-            const saved = localStorage.getItem(RL2_STORAGE_KEY);
-            if (!saved) return;
-            try {
-                const data = JSON.parse(saved);
-                RL2_FIELDS.forEach(id => {
-                    if (data[id] !== undefined && data[id] !== '') {
-                        document.getElementById(id).value = data[id];
-                    }
-                });
-            } catch(e) {}
+            const data = Storage.get(RL2_STORAGE_KEY);
+            if (!data) return;
+            RL2_FIELDS.forEach(id => {
+                if (data[id] !== undefined && data[id] !== '') {
+                    document.getElementById(id).value = data[id];
+                }
+            });
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -1161,9 +1230,8 @@
         });
 
         function uebernahmeVermoegen2() {
-            if (entries.length === 0) { alert('Keine Einträge vorhanden'); return; }
-            const latest = entries[0];
-            const total = accounts.reduce((s, a) => s + (latest[a.id] || 0), 0);
+            if (AppState.entries.length === 0) { alert('Keine Einträge vorhanden'); return; }
+            const total = calculateTotals(AppState.entries[0]).total;
             document.getElementById('rl2_vermoegen').value = total.toFixed(2);
             saveRL2Data();
         }
@@ -1235,8 +1303,7 @@
 
         // ── Rentenlücke Berechnung ────────────────────────────────
 
-        let rl2Chart = null;
-        let rl2ChartData = null;
+        // rl2Chart and rl2ChartData are in AppState
 
         function berechneRentenluecke2() {
             const alter = parseInt(document.getElementById('rl2_alter').value);
@@ -1482,14 +1549,14 @@
             `;
 
             // Chart-Daten
-            rl2ChartData = { labels, vermoegenVerlauf, nettoBedarfVerlauf, nettoRenteVerlauf, entnahmeVerlauf };
+            AppState.rl2ChartData = { labels, vermoegenVerlauf, nettoBedarfVerlauf, nettoRenteVerlauf, entnahmeVerlauf };
             document.getElementById('rl2ChartContainer').style.display = 'block';
             updateRL2Chart();
         }
 
         function updateRL2Chart() {
-            if (!rl2ChartData) return;
-            const { labels, vermoegenVerlauf, nettoBedarfVerlauf, nettoRenteVerlauf, entnahmeVerlauf } = rl2ChartData;
+            if (!AppState.rl2ChartData) return;
+            const { labels, vermoegenVerlauf, nettoBedarfVerlauf, nettoRenteVerlauf, entnahmeVerlauf } = AppState.rl2ChartData;
             const showV = document.getElementById('rl2ShowVermoegen').checked;
             const showB = document.getElementById('rl2ShowNettoBedarf').checked;
             const showR = document.getElementById('rl2ShowNettoRente').checked;
@@ -1526,9 +1593,9 @@
             const needsY1 = showB || showR || showE;
 
             const ctx = document.getElementById('rl2Chart').getContext('2d');
-            if (rl2Chart) rl2Chart.destroy();
+            if (AppState.rl2Chart) AppState.rl2Chart.destroy();
 
-            rl2Chart = new Chart(ctx, {
+            AppState.rl2Chart = new Chart(ctx, {
                 type: 'line',
                 data: { labels, datasets },
                 options: {
@@ -1561,9 +1628,9 @@
         }
 
         function exportData() {
-            if (entries.length === 0) { alert('Keine Daten zum Exportieren'); return; }
+            if (AppState.entries.length === 0) { alert('Keine Daten zum Exportieren'); return; }
             let csv = 'Datum;' + accounts.map(a => a.label).join(';') + '\n';
-            [...entries].reverse().forEach(e => {
+            [...AppState.entries].reverse().forEach(e => {
                 csv += formatDate(e.date) + ';';
                 csv += accounts.map(a => (e[a.id] || 0).toString().replace('.', ',')).join(';');
                 csv += '\n';
