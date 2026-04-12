@@ -352,51 +352,7 @@
                 </div>
             </div>
             <div id="bankCheckboxes" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 12px;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
-                    <div style="border-left: 3px solid #8b5cf6; padding-left: 0.75rem;">
-                        <div style="font-weight: 600; color: #8b5cf6; margin-bottom: 0.5rem; font-size: 0.9rem;">MLP</div>
-                        <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showMLP_Gesamt" onchange="updateChartDisplay()"><span>Gesamt</span></label>
-                        <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showMLP_Konto" onchange="updateChartDisplay()"><span>Konto</span></label>
-                        <label class="chart-checkbox"><input type="checkbox" id="showMLP_Depot" onchange="updateChartDisplay()"><span>Depot</span></label>
-                    </div>
-                    <div style="border-left: 3px solid #3b82f6; padding-left: 0.75rem;">
-                        <div style="font-weight: 600; color: #3b82f6; margin-bottom: 0.5rem; font-size: 0.9rem;">Consors</div>
-                        <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showConsors_Gesamt" onchange="updateChartDisplay()"><span>Gesamt</span></label>
-                        <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showConsors_Konto" onchange="updateChartDisplay()"><span>Konto</span></label>
-                        <label class="chart-checkbox"><input type="checkbox" id="showConsors_Depot" onchange="updateChartDisplay()"><span>Depot</span></label>
-                    </div>
-                    <div style="border-left: 3px solid #10b981; padding-left: 0.75rem;">
-                        <div style="font-weight: 600; color: #10b981; margin-bottom: 0.5rem; font-size: 0.9rem;">Trade Republic</div>
-                        <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showTR_Gesamt" onchange="updateChartDisplay()"><span>Gesamt</span></label>
-                        <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showTR_Konto" onchange="updateChartDisplay()"><span>Konto</span></label>
-                        <label class="chart-checkbox"><input type="checkbox" id="showTR_Depot" onchange="updateChartDisplay()"><span>Depot</span></label>
-                    </div>
-                    <div style="border-left: 3px solid #f59e0b; padding-left: 0.75rem;">
-                        <div style="font-weight: 600; color: #f59e0b; margin-bottom: 0.5rem; font-size: 0.9rem;">Volksbank</div>
-                        <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showVB_Gesamt" onchange="updateChartDisplay()"><span>Gesamt</span></label>
-                        <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showVB_Konto" onchange="updateChartDisplay()"><span>Konto</span></label>
-                        <label class="chart-checkbox"><input type="checkbox" id="showVB_Depot" onchange="updateChartDisplay()"><span>Depot</span></label>
-                    </div>
-                    <div style="border-left: 3px solid #ec4899; padding-left: 0.75rem;">
-                        <div style="font-weight: 600; color: #ec4899; margin-bottom: 0.5rem; font-size: 0.9rem;">Union Investment</div>
-                        <label class="chart-checkbox"><input type="checkbox" id="showUI_Depot" onchange="updateChartDisplay()"><span>Depot</span></label>
-                    </div>
-                    <div style="border-left: 3px solid #6366f1; padding-left: 0.75rem;">
-                        <div style="font-weight: 600; color: #6366f1; margin-bottom: 0.5rem; font-size: 0.9rem;">adidas</div>
-                        <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showAdidas_Gesamt" onchange="updateChartDisplay()"><span>Gesamt</span></label>
-                        <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showAdidas_Konto" onchange="updateChartDisplay()"><span>Konto</span></label>
-                        <label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="showAdidas_Depot" onchange="updateChartDisplay()"><span>Depot</span></label>
-                        <label class="chart-checkbox"><input type="checkbox" id="showAdidas_LTA" onchange="updateChartDisplay()"><span>LTA</span></label>
-                    </div>
-                    <div style="border-left: 3px solid #14b8a6; padding-left: 0.75rem;">
-                        <div style="font-weight: 600; color: #14b8a6; margin-bottom: 0.5rem; font-size: 0.9rem;">Commerzbank</div>
-                        <label class="chart-checkbox"><input type="checkbox" id="showCoba_Depot" onchange="updateChartDisplay()"><span>Depot</span></label>
-                    </div>
-                    <div style="border-left: 3px solid #e11d48; padding-left: 0.75rem;">
-                        <div style="font-weight: 600; color: #e11d48; margin-bottom: 0.5rem; font-size: 0.9rem;">Allianz Riester</div>
-                        <label class="chart-checkbox"><input type="checkbox" id="showAllianz_Konto" onchange="updateChartDisplay()"><span>Konto</span></label>
-                    </div>
-                </div>
+                <div id="bankCheckboxesGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;"></div>
             </div>
             <canvas id="wealthChart"></canvas>
             <div class="time-filter">
@@ -424,46 +380,7 @@
                     <input type="date" id="entryDate" required>
                 </div>
                 <button class="btn btn-secondary copy-all-btn" id="copyPreviousBtn" onclick="copyPreviousEntry()" style="margin-bottom: 1rem; font-size: 0.85rem;">Alle Werte vom letzten Eintrag übernehmen</button>
-                <div class="banks-container">
-                    <div class="bank-column">
-                        <div class="bank-header">MLP <button class="copy-bank-btn" onclick="copyPreviousBank('mlp')" title="Werte übernehmen">&#x25C0;</button></div>
-                        <div class="input-group" style="margin-bottom: 0.5rem;"><label>Konto</label><input type="number" step="0.01" id="mlp_konto" placeholder="0.00"></div>
-                        <div class="input-group"><label>Depot</label><input type="number" step="0.01" id="mlp_depot" placeholder="0.00"></div>
-                    </div>
-                    <div class="bank-column">
-                        <div class="bank-header">Consors <button class="copy-bank-btn" onclick="copyPreviousBank('consors')" title="Werte übernehmen">&#x25C0;</button></div>
-                        <div class="input-group" style="margin-bottom: 0.5rem;"><label>Konto</label><input type="number" step="0.01" id="consors_konto" placeholder="0.00"></div>
-                        <div class="input-group"><label>Depot</label><input type="number" step="0.01" id="consors_depot" placeholder="0.00"></div>
-                    </div>
-                    <div class="bank-column">
-                        <div class="bank-header">Trade Republic <button class="copy-bank-btn" onclick="copyPreviousBank('tr')" title="Werte übernehmen">&#x25C0;</button></div>
-                        <div class="input-group" style="margin-bottom: 0.5rem;"><label>Konto</label><input type="number" step="0.01" id="tr_konto" placeholder="0.00"></div>
-                        <div class="input-group"><label>Depot</label><input type="number" step="0.01" id="tr_depot" placeholder="0.00"></div>
-                    </div>
-                    <div class="bank-column">
-                        <div class="bank-header">Volksbank <button class="copy-bank-btn" onclick="copyPreviousBank('vb')" title="Werte übernehmen">&#x25C0;</button></div>
-                        <div class="input-group" style="margin-bottom: 0.5rem;"><label>Konto</label><input type="number" step="0.01" id="vb_konto" placeholder="0.00"></div>
-                        <div class="input-group"><label>Depot</label><input type="number" step="0.01" id="vb_depot" placeholder="0.00"></div>
-                    </div>
-                    <div class="bank-column">
-                        <div class="bank-header">Union Investment <button class="copy-bank-btn" onclick="copyPreviousBank('ui')" title="Werte übernehmen">&#x25C0;</button></div>
-                        <div class="input-group"><label>Depot</label><input type="number" step="0.01" id="ui_depot" placeholder="0.00"></div>
-                    </div>
-                    <div class="bank-column">
-                        <div class="bank-header">adidas <button class="copy-bank-btn" onclick="copyPreviousBank('adidas')" title="Werte übernehmen">&#x25C0;</button></div>
-                        <div class="input-group" style="margin-bottom: 0.5rem;"><label>Konto</label><input type="number" step="0.01" id="adidas_konto" placeholder="0.00"></div>
-                        <div class="input-group" style="margin-bottom: 0.5rem;"><label>Depot</label><input type="number" step="0.01" id="adidas_depot" placeholder="0.00"></div>
-                        <div class="input-group"><label>LTA</label><input type="number" step="0.01" id="adidas_lta" placeholder="0.00"></div>
-                    </div>
-                    <div class="bank-column">
-                        <div class="bank-header">Commerzbank <button class="copy-bank-btn" onclick="copyPreviousBank('coba')" title="Werte übernehmen">&#x25C0;</button></div>
-                        <div class="input-group"><label>Depot</label><input type="number" step="0.01" id="coba_depot" placeholder="0.00"></div>
-                    </div>
-                    <div class="bank-column">
-                        <div class="bank-header">Allianz Riester <button class="copy-bank-btn" onclick="copyPreviousBank('allianz')" title="Werte übernehmen">&#x25C0;</button></div>
-                        <div class="input-group"><label>Konto</label><input type="number" step="0.01" id="allianz_konto" placeholder="0.00"></div>
-                    </div>
-                </div>
+                <div class="banks-container" id="bankInputsContainer"></div>
                 <div style="margin-top: 2rem; display: flex; gap: 1rem;">
                     <button class="btn btn-primary" id="saveEntryBtn" onclick="saveEntry()" style="flex: 1;">Speichern</button>
                     <button class="btn btn-secondary" onclick="closeModal('addEntryModal')">Abbrechen</button>
@@ -1197,6 +1114,43 @@
         // ── Helpers ───────────────────────────────────────────────────
         function clearInputs() { accounts.forEach(acc => { document.getElementById(acc.id).value = ''; }); }
 
+        // ── Dynamic HTML generation from BANKS registry (OCP) ────
+        function generateBankCheckboxes() {
+            return BANKS.map(bank => {
+                let checkboxes = '';
+                if (bank.accounts.length > 1) {
+                    checkboxes += `<label class="chart-checkbox" style="margin-bottom: 0.25rem;"><input type="checkbox" id="show${bank.cbPrefix}_Gesamt" onchange="updateChartDisplay()"><span>Gesamt</span></label>`;
+                }
+                bank.accounts.forEach((acc, i) => {
+                    const cbId = `show${bank.cbPrefix}_${acc.suffix === 'lta' ? 'LTA' : acc.label}`;
+                    const isLast = i === bank.accounts.length - 1 && bank.accounts.length <= 1;
+                    checkboxes += `<label class="chart-checkbox"${!isLast ? ' style="margin-bottom: 0.25rem;"' : ''}><input type="checkbox" id="${cbId}" onchange="updateChartDisplay()"><span>${acc.label}</span></label>`;
+                });
+                return `<div style="border-left: 3px solid ${bank.color}; padding-left: 0.75rem;">
+                    <div style="font-weight: 600; color: ${bank.color}; margin-bottom: 0.5rem; font-size: 0.9rem;">${bank.label}</div>
+                    ${checkboxes}
+                </div>`;
+            }).join('');
+        }
+
+        function generateBankInputs() {
+            return BANKS.map(bank => {
+                const inputs = bank.accounts.map((acc, i) => {
+                    const isLast = i === bank.accounts.length - 1;
+                    return `<div class="input-group"${!isLast ? ' style="margin-bottom: 0.5rem;"' : ''}><label>${acc.label}</label><input type="number" step="0.01" id="${bank.prefix}_${acc.suffix}" placeholder="0.00"></div>`;
+                }).join('');
+                return `<div class="bank-column">
+                    <div class="bank-header">${bank.label} <button class="copy-bank-btn" onclick="copyPreviousBank('${bank.prefix}')" title="Werte übernehmen">&#x25C0;</button></div>
+                    ${inputs}
+                </div>`;
+            }).join('');
+        }
+
+        function initDynamicHTML() {
+            document.getElementById('bankCheckboxesGrid').innerHTML = generateBankCheckboxes();
+            document.getElementById('bankInputsContainer').innerHTML = generateBankInputs();
+        }
+
         // ── Tab Navigation ───────────────────────────────────────
         function switchTab(tabName) {
             document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
@@ -1227,6 +1181,7 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            initDynamicHTML();
             RL2_FIELDS.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.addEventListener('input', saveRL2Data);
