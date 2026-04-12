@@ -1056,7 +1056,7 @@
             document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('modalTitle').textContent = 'Neuer Eintrag';
             document.getElementById('saveEntryBtn').textContent = 'Speichern';
-            document.getElementById('copyPreviousBtn').style.display = '';
+            document.getElementById('transferDataBtn').style.display = '';
             document.querySelectorAll('.copy-bank-btn').forEach(b => b.style.display = '');
             clearInputs();
             document.getElementById('transferDataSection').style.display = entries.length > 0 ? 'block' : 'none';
