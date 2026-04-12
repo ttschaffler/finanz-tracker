@@ -23,6 +23,15 @@ Everything lives in `index.html` (~1400 lines):
 - `<body>`: Two tabs — Vermögensübersicht (wealth overview) and Rentenlücke (pension gap)
 - `<script>` block: All JS logic (~600+ lines) at the bottom
 
+## Design Principles
+
+- Always follow **SOLID** design principles:
+    - **S**ingle Responsibility: Each function/module should have one reason to change
+    - **O**pen/Closed: Code should be open for extension, closed for modification
+    - **L**iskov Substitution: Subtypes must be substitutable for their base types
+    - **I**nterface Segregation: Prefer small, focused interfaces over large ones
+    - **D**ependency Inversion: Depend on abstractions, not concrete implementations
+
 ## Code Conventions
 
 - **Language**: All UI text is in German
