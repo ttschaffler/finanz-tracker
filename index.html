@@ -994,128 +994,70 @@
 
         function updateChartDisplay() { saveChartPreferences(); renderChart(getFilteredEntries()); }
 
-        function renderChart(list) {
-            const canvas = document.getElementById('wealthChart');
-            const ctx = canvas.getContext('2d');
-            if (AppState.wealthChart) { AppState.wealthChart.destroy(); }
-            if (list.length === 0) return;
+        // ── Chart helpers (SRP) ───────────────────────────────────────
+        function yearsBetween(d1, d2) {
+            return (new Date(d2) - new Date(d1)) / (365.25 * 24 * 3600 * 1000);
+        }
 
-            const sorted = [...list].reverse();
-            const historicalLength = sorted.length;
-            const checked = id => document.getElementById(id).checked;
+        function makeChartLine(label, data, color, ctx, opts = {}) {
+            const grad = opts.fill ? (() => {
+                const g = ctx.createLinearGradient(0, 0, 0, 400);
+                g.addColorStop(0, `rgba(${opts.fill.join(',')},0.3)`);
+                g.addColorStop(1, `rgba(${opts.fill.join(',')},0.0)`);
+                return g;
+            })() : 'transparent';
+            return {
+                label, data, borderColor: color, backgroundColor: grad,
+                borderWidth: opts.width ?? 2, fill: !!opts.fill, tension: 0.4,
+                pointRadius: opts.pointRadius ?? 3,
+                pointHoverRadius: (opts.pointRadius ?? 3) + 2,
+                pointBackgroundColor: color, pointBorderColor: '#0f1419', pointBorderWidth: 2,
+                borderDash: opts.dash ?? [],
+                ...(opts.segment ? { segment: opts.segment } : {})
+            };
+        }
+
+        // OCP: bank datasets derived from BANKS registry
+        function buildBankDatasets(sorted, forecastCount, ctx, forecastSeg) {
+            const checked = id => { const el = document.getElementById(id); return el && el.checked; };
             const nf = n => Array(n).fill(null);
-
-            // ── 10-year forecast dates from the last entry (only when Inflation is active) ──
-            const showForecast = checked('showInflation');
-            const lastEntryDate = new Date(sorted[sorted.length - 1].date);
-            const forecastDates = [];
-            if (showForecast) {
-                for (let i = 1; i <= 10; i++) {
-                    const d = new Date(lastEntryDate);
-                    d.setFullYear(d.getFullYear() + i);
-                    forecastDates.push(d.toISOString().split('T')[0]);
-                }
-            }
-            const forecastCount = forecastDates.length;
-            const allDates = [...sorted.map(e => e.date), ...forecastDates];
-            const labels   = allDates.map(d => formatDate(d));
-
-            // ── Benchmark base: first visible entry ──
-            const baseDate  = sorted[0].date;
-            const baseTotal = accounts.reduce((s, a) => s + (sorted[0][a.id] || 0), 0);
-            const MSCI_RATE = 0.08;
-            const INFL_RATE = 0.025;
-            function yearsBetween(d1, d2) {
-                return (new Date(d2) - new Date(d1)) / (365.25 * 24 * 3600 * 1000);
-            }
-            const msciValues = allDates.map(d =>
-                Math.round(baseTotal * Math.pow(1 + MSCI_RATE, yearsBetween(baseDate, d)) * 100) / 100);
-            const inflValues = allDates.map(d =>
-                Math.round(baseTotal * Math.pow(1 + INFL_RATE, yearsBetween(baseDate, d)) * 100) / 100);
-
             const datasets = [];
-            function makeGradient(r, g, b) {
-                const grad = ctx.createLinearGradient(0, 0, 0, 400);
-                grad.addColorStop(0, `rgba(${r},${g},${b},0.3)`);
-                grad.addColorStop(1, `rgba(${r},${g},${b},0.0)`);
-                return grad;
-            }
-            const forecastSeg = { borderDash: c => c.p0DataIndex >= historicalLength - 1 ? [8, 4] : [] };
+            const DASH_MAP = { konto: [5, 5], depot: [], lta: [2, 2] };
 
-            function line(label, data, color, opts = {}) {
-                return {
-                    label, data, borderColor: color,
-                    backgroundColor: opts.fill ? makeGradient(...opts.fill) : 'transparent',
-                    borderWidth: opts.width ?? 2, fill: !!opts.fill, tension: 0.4,
-                    pointRadius: opts.pointRadius ?? 3,
-                    pointHoverRadius: (opts.pointRadius ?? 3) + 2,
-                    pointBackgroundColor: color, pointBorderColor: '#0f1419', pointBorderWidth: 2,
-                    borderDash: opts.dash ?? [],
-                    ...(opts.segment ? { segment: opts.segment } : {})
-                };
-            }
-
-            if (checked('showTotal'))
-                datasets.push(line('Gesamtvermögen',
-                    [...sorted.map(e => accounts.reduce((s, a) => s + (e[a.id] || 0), 0)), ...nf(forecastCount)],
-                    '#d4af37', { fill: [212, 175, 55], width: 3, pointRadius: 6 }));
-            if (checked('showKonten'))
-                datasets.push(line('Konten',
-                    [...sorted.map(e => accounts.filter(a => a.type === 'konto').reduce((s, a) => s + (e[a.id] || 0), 0)), ...nf(forecastCount)],
-                    '#2dd4bf', { fill: [45, 212, 191], pointRadius: 4 }));
-            if (checked('showDepots'))
-                datasets.push(line('Depots',
-                    [...sorted.map(e => accounts.filter(a => a.type === 'depot' || a.type === 'lta').reduce((s, a) => s + (e[a.id] || 0), 0)), ...nf(forecastCount)],
-                    '#f87171', { fill: [248, 113, 113], pointRadius: 4 }));
-
-            const bankTotals = [
-                ['showMLP_Gesamt',     'MLP Gesamt',              '#8b5cf6', ['mlp_konto', 'mlp_depot']],
-                ['showConsors_Gesamt', 'Consors Gesamt',          '#3b82f6', ['consors_konto', 'consors_depot']],
-                ['showTR_Gesamt',      'Trade Republic Gesamt',   '#10b981', ['tr_konto', 'tr_depot']],
-                ['showVB_Gesamt',      'Volksbank Gesamt',        '#f59e0b', ['vb_konto', 'vb_depot']],
-                ['showAdidas_Gesamt',  'adidas Gesamt',           '#6366f1', ['adidas_konto', 'adidas_depot', 'adidas_lta']],
-            ];
-            bankTotals.forEach(([cbId, label, color, fields]) => {
-                if (checked(cbId))
-                    datasets.push(line(label, [...sorted.map(e => fields.reduce((s, f) => s + (e[f] || 0), 0)), ...nf(forecastCount)], color, { width: 2.5, pointRadius: 4 }));
+            BANKS.forEach(bank => {
+                // Bank total line (only if >1 account)
+                if (bank.accounts.length > 1) {
+                    const cbId = `show${bank.cbPrefix}_Gesamt`;
+                    if (checked(cbId)) {
+                        const fieldIds = bank.accounts.map(a => `${bank.prefix}_${a.suffix}`);
+                        datasets.push(makeChartLine(
+                            `${bank.label} Gesamt`,
+                            [...sorted.map(e => fieldIds.reduce((s, f) => s + (e[f] || 0), 0)), ...nf(forecastCount)],
+                            bank.color, ctx, { width: 2.5, pointRadius: 4 }
+                        ));
+                    }
+                }
+                // Individual account lines
+                bank.accounts.forEach(acc => {
+                    const cbId = `show${bank.cbPrefix}_${acc.suffix === 'lta' ? 'LTA' : acc.label}`;
+                    const fieldId = `${bank.prefix}_${acc.suffix}`;
+                    if (checked(cbId)) {
+                        datasets.push(makeChartLine(
+                            `${bank.label} ${acc.label}`,
+                            [...sorted.map(e => e[fieldId] || 0), ...nf(forecastCount)],
+                            bank.color, ctx, { dash: DASH_MAP[acc.suffix] || [] }
+                        ));
+                    }
+                });
             });
+            return datasets;
+        }
 
-            const bankLines = [
-                ['showMLP_Konto',     'MLP Konto',              '#8b5cf6', 'mlp_konto',     { dash: [5,5] }],
-                ['showMLP_Depot',     'MLP Depot',              '#8b5cf6', 'mlp_depot',     {}],
-                ['showConsors_Konto', 'Consors Konto',          '#3b82f6', 'consors_konto', { dash: [5,5] }],
-                ['showConsors_Depot', 'Consors Depot',          '#3b82f6', 'consors_depot', {}],
-                ['showTR_Konto',      'Trade Republic Konto',   '#10b981', 'tr_konto',      { dash: [5,5] }],
-                ['showTR_Depot',      'Trade Republic Depot',   '#10b981', 'tr_depot',      {}],
-                ['showVB_Konto',      'Volksbank Konto',        '#f59e0b', 'vb_konto',      { dash: [5,5] }],
-                ['showVB_Depot',      'Volksbank Depot',        '#f59e0b', 'vb_depot',      {}],
-                ['showUI_Depot',      'Union Investment Depot', '#ec4899', 'ui_depot',      {}],
-                ['showAdidas_Konto',  'adidas Konto',           '#6366f1', 'adidas_konto',  { dash: [5,5] }],
-                ['showAdidas_Depot',  'adidas Depot',           '#6366f1', 'adidas_depot',  {}],
-                ['showAdidas_LTA',    'adidas LTA',             '#6366f1', 'adidas_lta',    { dash: [2,2] }],
-                ['showCoba_Depot',    'Commerzbank Depot',      '#14b8a6', 'coba_depot',    {}],
-                ['showAllianz_Konto', 'Allianz Riester Konto',  '#e11d48', 'allianz_konto', { dash: [5,5] }],
-            ];
-            bankLines.forEach(([cbId, label, color, field, opts]) => {
-                if (checked(cbId))
-                    datasets.push(line(label, [...sorted.map(e => e[field] || 0), ...nf(forecastCount)], color, opts));
-            });
-
-            // ── MSCI World benchmark (solid history → dashed forecast) ──
-            if (checked('showMSCI'))
-                datasets.push(line('MSCI World (8% p.a.)', msciValues, '#f97316',
-                    { width: 2, pointRadius: 2, segment: forecastSeg }));
-
-            // ── Inflation / Kaufkrafterhalt (solid history → dashed forecast) ──
-            if (checked('showInflation'))
-                datasets.push(line('Kaufkrafterhalt (2,5% p.a.)', inflValues, '#94a3b8',
-                    { width: 1.5, pointRadius: 1, segment: forecastSeg }));
-
-            // ── Inline plugin: vertical divider at forecast boundary ──
-            const dividerPlugin = {
+        function createDividerPlugin(historicalLength, totalLength) {
+            return {
                 id: 'forecastDivider',
                 afterDraw(chart) {
-                    if (historicalLength >= allDates.length) return;
+                    if (historicalLength >= totalLength) return;
                     const { ctx: c, scales: { x, y } } = chart;
                     const px = x.getPixelForValue(historicalLength - 1);
                     c.save();
@@ -1133,29 +1075,92 @@
                     c.restore();
                 }
             };
+        }
+
+        function buildChartOptions() {
+            return {
+                responsive: true, maintainAspectRatio: true,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: true, position: 'top', labels: { color: '#f8fafc', font: { family: 'Work Sans', size: 13, weight: '500' }, padding: 15, usePointStyle: true, pointStyle: 'circle' } },
+                    tooltip: {
+                        backgroundColor: 'rgba(35,41,52,0.95)', titleColor: '#d4af37', bodyColor: '#f8fafc',
+                        borderColor: '#334155', borderWidth: 1, padding: 12,
+                        titleFont: { family: 'Playfair Display', size: 14, weight: '600' },
+                        bodyFont:  { family: 'Work Sans', size: 13 },
+                        callbacks: { label: c => (c.dataset.label ? c.dataset.label + ': ' : '') + (c.parsed.y != null ? Formatter.currency(c.parsed.y) : '\u2014') }
+                    }
+                },
+                scales: {
+                    x: { grid: { color: 'rgba(51,65,85,0.3)', drawBorder: false }, ticks: { color: '#94a3b8', font: { family: 'Work Sans', size: 11 }, maxTicksLimit: 16 } },
+                    y: { grid: { color: 'rgba(51,65,85,0.3)', drawBorder: false }, ticks: { color: '#94a3b8', font: { family: 'Work Sans', size: 11 }, callback: v => Formatter.currencyShort(v) } }
+                }
+            };
+        }
+
+        // ── renderChart (coordinator) ─────────────────────────────────
+        function renderChart(list) {
+            const canvas = document.getElementById('wealthChart');
+            const ctx = canvas.getContext('2d');
+            if (AppState.wealthChart) { AppState.wealthChart.destroy(); }
+            if (list.length === 0) return;
+
+            const sorted = [...list].reverse();
+            const historicalLength = sorted.length;
+            const checked = id => document.getElementById(id).checked;
+            const nf = n => Array(n).fill(null);
+
+            // Forecast dates
+            const showForecast = checked('showInflation');
+            const lastEntryDate = new Date(sorted[sorted.length - 1].date);
+            const forecastDates = [];
+            if (showForecast) {
+                for (let i = 1; i <= 10; i++) {
+                    const d = new Date(lastEntryDate);
+                    d.setFullYear(d.getFullYear() + i);
+                    forecastDates.push(d.toISOString().split('T')[0]);
+                }
+            }
+            const forecastCount = forecastDates.length;
+            const allDates = [...sorted.map(e => e.date), ...forecastDates];
+            const labels = allDates.map(d => Formatter.date(d));
+            const forecastSeg = { borderDash: c => c.p0DataIndex >= historicalLength - 1 ? [8, 4] : [] };
+
+            // Benchmark values
+            const baseDate = sorted[0].date;
+            const baseTotal = calculateTotals(sorted[0]).total;
+            const msciValues = allDates.map(d => Math.round(baseTotal * Math.pow(1.08, yearsBetween(baseDate, d)) * 100) / 100);
+            const inflValues = allDates.map(d => Math.round(baseTotal * Math.pow(1.025, yearsBetween(baseDate, d)) * 100) / 100);
+
+            // Build datasets
+            const datasets = [];
+            if (checked('showTotal'))
+                datasets.push(makeChartLine('Gesamtvermögen',
+                    [...sorted.map(e => calculateTotals(e).total), ...nf(forecastCount)],
+                    '#d4af37', ctx, { fill: [212, 175, 55], width: 3, pointRadius: 6 }));
+            if (checked('showKonten'))
+                datasets.push(makeChartLine('Konten',
+                    [...sorted.map(e => calculateTotals(e).konten), ...nf(forecastCount)],
+                    '#2dd4bf', ctx, { fill: [45, 212, 191], pointRadius: 4 }));
+            if (checked('showDepots'))
+                datasets.push(makeChartLine('Depots',
+                    [...sorted.map(e => calculateTotals(e).depots), ...nf(forecastCount)],
+                    '#f87171', ctx, { fill: [248, 113, 113], pointRadius: 4 }));
+
+            datasets.push(...buildBankDatasets(sorted, forecastCount, ctx, forecastSeg));
+
+            if (checked('showMSCI'))
+                datasets.push(makeChartLine('MSCI World (8% p.a.)', msciValues, '#f97316',
+                    ctx, { width: 2, pointRadius: 2, segment: forecastSeg }));
+            if (checked('showInflation'))
+                datasets.push(makeChartLine('Kaufkrafterhalt (2,5% p.a.)', inflValues, '#94a3b8',
+                    ctx, { width: 1.5, pointRadius: 1, segment: forecastSeg }));
 
             AppState.wealthChart = new Chart(ctx, {
                 type: 'line',
                 data: { labels, datasets },
-                plugins: showForecast ? [dividerPlugin] : [],
-                options: {
-                    responsive: true, maintainAspectRatio: true,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: { display: true, position: 'top', labels: { color: '#f8fafc', font: { family: 'Work Sans', size: 13, weight: '500' }, padding: 15, usePointStyle: true, pointStyle: 'circle' } },
-                        tooltip: {
-                            backgroundColor: 'rgba(35,41,52,0.95)', titleColor: '#d4af37', bodyColor: '#f8fafc',
-                            borderColor: '#334155', borderWidth: 1, padding: 12,
-                            titleFont: { family: 'Playfair Display', size: 14, weight: '600' },
-                            bodyFont:  { family: 'Work Sans', size: 13 },
-                            callbacks: { label: c => (c.dataset.label ? c.dataset.label + ': ' : '') + (c.parsed.y != null ? formatCurrency(c.parsed.y) : '\u2014') }
-                        }
-                    },
-                    scales: {
-                        x: { grid: { color: 'rgba(51,65,85,0.3)', drawBorder: false }, ticks: { color: '#94a3b8', font: { family: 'Work Sans', size: 11 }, maxTicksLimit: 16 } },
-                        y: { grid: { color: 'rgba(51,65,85,0.3)', drawBorder: false }, ticks: { color: '#94a3b8', font: { family: 'Work Sans', size: 11 }, callback: v => Formatter.currencyShort(v) } }
-                    }
-                }
+                plugins: showForecast ? [createDividerPlugin(historicalLength, allDates.length)] : [],
+                options: buildChartOptions()
             });
         }
 
@@ -1303,9 +1308,29 @@
 
         // ── Rentenlücke Berechnung ────────────────────────────────
 
-        // rl2Chart and rl2ChartData are in AppState
+        // Standalone netto calculation (ISP: explicit params, no closure dependency)
+        function berechneNetto(gesetzlBruttoMonat, betriebsBruttoMonat, entnahmeMonat, bestAnteilFix, istVerheiratet, pvSatz) {
+            const gesetzlJahr = gesetzlBruttoMonat * 12;
+            const betriebsJahr = betriebsBruttoMonat * 12;
+            const kvGesetzl = gesetzlJahr * KV_RENTNER_SATZ;
+            const pvGesetzl = gesetzlJahr * pvSatz;
+            const betriebsFreigrenze = BETRIEBSRENTE_FREIGRENZE_MONAT * 12;
+            const kvBetrieb = Math.max(0, betriebsJahr - betriebsFreigrenze) * KV_BETRIEB_VOLL;
+            const pvBetrieb = betriebsJahr * pvSatz;
+            const sozialAbgaben = kvGesetzl + pvGesetzl + kvBetrieb + pvBetrieb;
+            const steuerpflGesetzl = gesetzlJahr * bestAnteilFix;
+            const steuerpflBetrieb = betriebsJahr;
+            const werbungskosten = 102;
+            const zvE = Math.max(0, steuerpflGesetzl + steuerpflBetrieb - werbungskosten);
+            const est = einkommensteuer(zvE, istVerheiratet);
+            const soli = solidaritaetszuschlag(est);
+            const steuer = est + soli;
+            const bruttoGesamt = gesetzlJahr + betriebsJahr + entnahmeMonat * 12;
+            const nettoGesamt = bruttoGesamt - sozialAbgaben - steuer;
+            return { nettoGesamt, sozialAbgaben, steuer, zvE, est, soli, kvGesetzl, pvGesetzl, kvBetrieb, pvBetrieb, bestAnteilFix, steuerpflGesetzl, steuerpflBetrieb, pvSatz };
+        }
 
-        function berechneRentenluecke2() {
+        function readRL2Inputs() {
             const alter = parseInt(document.getElementById('rl2_alter').value);
             const rentenalter = parseInt(document.getElementById('rl2_rentenalter').value);
             const gesetzlichBrutto = parseFloat(document.getElementById('rl2_gesetzliche_rente').value);
@@ -1316,82 +1341,36 @@
             const vermoegen = parseFloat(document.getElementById('rl2_vermoegen').value) || 0;
             const verzinsung = parseFloat(document.getElementById('rl2_verzinsung').value);
             const entnahmezeitraum = parseInt(document.getElementById('rl2_entnahmezeitraum').value);
+            const istVerheiratet = document.getElementById('rl2_verheiratet').value === 'verheiratet';
+            const anzahlKinder = parseInt(document.getElementById('rl2_kinder').value) || 0;
 
             if (!alter || !rentenalter || isNaN(gesetzlichBrutto) || isNaN(rentensteigerung) || isNaN(wunschrenteNetto) || isNaN(inflation) || isNaN(verzinsung) || !entnahmezeitraum) {
-                alert('Bitte alle Pflichtfelder ausfüllen');
-                return;
+                return null;
             }
             if (rentenalter <= alter) {
-                alert('Renteneintrittsalter muss größer als das aktuelle Alter sein');
-                return;
+                return null;
             }
+            return { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder };
+        }
 
-            saveRL2Data();
-
+        function calculateRL2(inputs) {
+            const { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
             const aktuellesJahr = new Date().getFullYear();
             const jahresBisRente = rentenalter - alter;
             const renteneintrittsjahr = aktuellesJahr + jahresBisRente;
             const inflRate = inflation / 100;
             const verzRate = verzinsung / 100;
             const steigRate = rentensteigerung / 100;
-
-            // Gesetzl. Rente brutto bei Renteneintritt (Eingabewert = Wert bei Renteneintritt)
             const gesetzlichBeiRente = gesetzlichBrutto;
-
-            // Besteuerungsanteil
             const bestAnteil = besteuerungsanteil(renteneintrittsjahr);
-
-            // Vermögen bei Renteneintritt
             const vermoegenBeiRente = vermoegen * Math.pow(1 + verzRate, jahresBisRente);
-
-            // Gewünschte Nettorente inflationsbereinigt bei Renteneintritt
             const wunschNettoBeiRente = wunschrenteNetto * Math.pow(1 + inflRate, jahresBisRente);
-
-            // ── Netto-Berechnung für ein gegebenes Jahr im Ruhestand ──
-            const istVerheiratet = document.getElementById('rl2_verheiratet').value === 'verheiratet';
-            const anzahlKinder = parseInt(document.getElementById('rl2_kinder').value) || 0;
             const pvSatz = pvRentnerSatz(anzahlKinder);
 
-            function berechneNetto(gesetzlBruttoMonat, betriebsBruttoMonat, entnahmeMonat, bestAnteilFix) {
-                const gesetzlJahr = gesetzlBruttoMonat * 12;
-                const betriebsJahr = betriebsBruttoMonat * 12;
-
-                // 1) Sozialabgaben auf gesetzliche Rente
-                const kvGesetzl = gesetzlJahr * KV_RENTNER_SATZ;
-                const pvGesetzl = gesetzlJahr * pvSatz;
-
-                // 2) Sozialabgaben auf Betriebsrente (voller KV-Satz oberhalb Freigrenze)
-                const betriebsFreigrenze = BETRIEBSRENTE_FREIGRENZE_MONAT * 12;
-                const kvBetrieb = Math.max(0, betriebsJahr - betriebsFreigrenze) * KV_BETRIEB_VOLL;
-                const pvBetrieb = betriebsJahr * pvSatz;
-
-                const sozialAbgaben = kvGesetzl + pvGesetzl + kvBetrieb + pvBetrieb;
-
-                // 3) Einkommensteuer (Splitting bei Verheirateten)
-                const steuerpflGesetzl = gesetzlJahr * bestAnteilFix;
-                const steuerpflBetrieb = betriebsJahr;
-                const werbungskosten = 102;
-                const zvE = Math.max(0, steuerpflGesetzl + steuerpflBetrieb - werbungskosten);
-                const est = einkommensteuer(zvE, istVerheiratet);
-                const soli = solidaritaetszuschlag(est);
-                const steuer = est + soli;
-
-                const bruttoGesamt = gesetzlJahr + betriebsJahr + entnahmeMonat * 12;
-                const nettoGesamt = bruttoGesamt - sozialAbgaben - steuer;
-
-                return { nettoGesamt, sozialAbgaben, steuer, zvE, est, soli, kvGesetzl, pvGesetzl, kvBetrieb, pvBetrieb, bestAnteilFix, steuerpflGesetzl, steuerpflBetrieb, pvSatz };
-            }
-
-            // ── Berechnung der benötigten monatl. Entnahme im 1. Rentenjahr ──
-            // Wir suchen die Entnahme, sodass netto = wunschNettoBeiRente
-            // Da Entnahme aus versteuertem Vermögen steuerfrei ist: netto = gesetzlNetto + betriebsNetto + entnahme
-            // → entnahme = wunschNetto - (gesetzlNetto + betriebsNetto)
-            // Dabei ist "gesetzlNetto + betriebsNetto" = brutto - sozialabgaben - steuer (ohne Entnahme)
-            const ohnEntnahme = berechneNetto(gesetzlichBeiRente, betriebsrenteBrutto, 0, bestAnteil);
+            const ohnEntnahme = berechneNetto(gesetzlichBeiRente, betriebsrenteBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
             const rentenNettoOhneEntnahme = ohnEntnahme.nettoGesamt / 12;
             const benoetigteEntnahmeMonat1 = Math.max(0, wunschNettoBeiRente - rentenNettoOhneEntnahme);
 
-            // ── Verlauf über Entnahmezeitraum ──
             const labels = [];
             const vermoegenVerlauf = [];
             const nettoBedarfVerlauf = [];
@@ -1400,55 +1379,44 @@
             let aktVermoegen = vermoegenBeiRente;
 
             for (let j = 0; j <= entnahmezeitraum; j++) {
-                const jahrLabel = renteneintrittsjahr + j;
-                labels.push(`${rentenalter + j} (${jahrLabel})`);
-
-                // Gesetzl. Rente steigt weiter mit Rentensteigerung
+                labels.push(`${rentenalter + j} (${renteneintrittsjahr + j})`);
                 const gesetzlJ = gesetzlichBeiRente * Math.pow(1 + steigRate, j);
-                // Wunsch-Netto steigt weiter mit Inflation
                 const wunschNettoJ = wunschNettoBeiRente * Math.pow(1 + inflRate, j);
-
-                const nettoOhne = berechneNetto(gesetzlJ, betriebsrenteBrutto, 0, bestAnteil);
+                const nettoOhne = berechneNetto(gesetzlJ, betriebsrenteBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
                 const renteNettoJ = nettoOhne.nettoGesamt / 12;
                 const entnahmeJ = Math.max(0, wunschNettoJ - renteNettoJ);
-
                 vermoegenVerlauf.push(Math.round(aktVermoegen * 100) / 100);
                 nettoBedarfVerlauf.push(Math.round(wunschNettoJ * 100) / 100);
                 nettoRenteVerlauf.push(Math.round(renteNettoJ * 100) / 100);
                 entnahmeVerlauf.push(Math.round(entnahmeJ * 100) / 100);
-
                 if (j < entnahmezeitraum) {
-                    // Vermögen verzinst sich, Entnahme wird abgezogen (jährlich)
                     aktVermoegen = aktVermoegen * (1 + verzRate) - entnahmeJ * 12;
                 }
             }
 
-            // ── Benötigtes Kapital (Barwert aller Entnahmen) ──
             let benoetigtesKapital = 0;
             for (let j = 0; j < entnahmezeitraum; j++) {
                 const gesetzlJ = gesetzlichBeiRente * Math.pow(1 + steigRate, j);
                 const wunschNettoJ = wunschNettoBeiRente * Math.pow(1 + inflRate, j);
-                const nettoOhne = berechneNetto(gesetzlJ, betriebsrenteBrutto, 0, bestAnteil);
+                const nettoOhne = berechneNetto(gesetzlJ, betriebsrenteBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
                 const entnahmeJ = Math.max(0, wunschNettoJ - nettoOhne.nettoGesamt / 12) * 12;
                 benoetigtesKapital += entnahmeJ / Math.pow(1 + verzRate, j);
             }
 
             const vermoegenslücke = Math.max(0, benoetigtesKapital - vermoegenBeiRente);
-
-            // Monatliche Sparrate
             let monatlicheSparrate = 0;
             if (vermoegenslücke > 0 && jahresBisRente > 0) {
                 const monatsZins = verzRate / 12;
                 const monate = jahresBisRente * 12;
-                if (monatsZins > 0) {
-                    monatlicheSparrate = vermoegenslücke * monatsZins / (Math.pow(1 + monatsZins, monate) - 1);
-                } else {
-                    monatlicheSparrate = vermoegenslücke / monate;
-                }
+                monatlicheSparrate = monatsZins > 0 ? vermoegenslücke * monatsZins / (Math.pow(1 + monatsZins, monate) - 1) : vermoegenslücke / monate;
             }
 
-            // ── Ergebnis-Anzeige ──
-            const r = ohnEntnahme;
+            return { jahresBisRente, renteneintrittsjahr, bestAnteil, vermoegenBeiRente, wunschNettoBeiRente, gesetzlichBeiRente, rentenNettoOhneEntnahme, benoetigteEntnahmeMonat1, benoetigtesKapital, vermoegenslücke, monatlicheSparrate, ohnEntnahme, pvSatz, labels, vermoegenVerlauf, nettoBedarfVerlauf, nettoRenteVerlauf, entnahmeVerlauf };
+        }
+
+        function renderRL2Results(results, inputs) {
+            const { jahresBisRente, renteneintrittsjahr, bestAnteil, vermoegenBeiRente, wunschNettoBeiRente, gesetzlichBeiRente, rentenNettoOhneEntnahme, benoetigteEntnahmeMonat1, benoetigtesKapital, vermoegenslücke, monatlicheSparrate, ohnEntnahme: r, pvSatz } = results;
+            const { betriebsrenteBrutto, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
             const container = document.getElementById('rl2Result');
             container.innerHTML = `
                 <div style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border);">
@@ -1548,10 +1516,26 @@
                 </div>
             `;
 
-            // Chart-Daten
-            AppState.rl2ChartData = { labels, vermoegenVerlauf, nettoBedarfVerlauf, nettoRenteVerlauf, entnahmeVerlauf };
+            AppState.rl2ChartData = { labels: results.labels, vermoegenVerlauf: results.vermoegenVerlauf, nettoBedarfVerlauf: results.nettoBedarfVerlauf, nettoRenteVerlauf: results.nettoRenteVerlauf, entnahmeVerlauf: results.entnahmeVerlauf };
             document.getElementById('rl2ChartContainer').style.display = 'block';
             updateRL2Chart();
+        }
+
+        // Coordinator
+        function berechneRentenluecke2() {
+            const inputs = readRL2Inputs();
+            if (!inputs) {
+                if (!inputs && document.getElementById('rl2_alter').value && document.getElementById('rl2_rentenalter').value) {
+                    const alter = parseInt(document.getElementById('rl2_alter').value);
+                    const rentenalter = parseInt(document.getElementById('rl2_rentenalter').value);
+                    if (rentenalter <= alter) { alert('Renteneintrittsalter muss größer als das aktuelle Alter sein'); return; }
+                }
+                alert('Bitte alle Pflichtfelder ausfüllen');
+                return;
+            }
+            saveRL2Data();
+            const results = calculateRL2(inputs);
+            renderRL2Results(results, inputs);
         }
 
         function updateRL2Chart() {
