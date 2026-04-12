@@ -424,7 +424,11 @@
                     <label>Datum</label>
                     <input type="date" id="entryDate" required>
                 </div>
-                <button class="btn btn-secondary copy-all-btn" id="copyPreviousBtn" onclick="copyPreviousEntry()" style="margin-bottom: 1rem; font-size: 0.85rem;">Alle Werte vom letzten Eintrag übernehmen</button>
+                <div id="transferDataSection" style="margin-bottom: 1rem;">
+                    <button class="btn btn-secondary" id="transferDataBtn" onclick="transferPreviousData()" style="width: 100%; padding: 0.75rem; font-size: 0.9rem; border: 1px dashed var(--accent-gold); color: var(--accent-gold); background: transparent; cursor: pointer;">
+                        &#8635; Vorherige Daten übernehmen
+                    </button>
+                </div>
                 <div class="banks-container">
                     <div class="bank-column">
                         <div class="bank-header">MLP <button class="copy-bank-btn" onclick="copyPreviousBank('mlp')" title="Werte übernehmen">&#x25C0;</button></div>
@@ -919,8 +923,7 @@
             });
             document.getElementById('modalTitle').textContent = 'Eintrag bearbeiten – ' + formatDate(entry.date);
             document.getElementById('saveEntryBtn').textContent = 'Änderungen speichern';
-            document.getElementById('copyPreviousBtn').style.display = 'none';
-            document.querySelectorAll('.copy-bank-btn').forEach(b => b.style.display = 'none');
+            document.getElementById('transferDataSection').style.display = 'none';
             document.getElementById('addEntryModal').classList.add('active');
         }
 
@@ -1166,22 +1169,17 @@
             document.getElementById('copyPreviousBtn').style.display = '';
             document.querySelectorAll('.copy-bank-btn').forEach(b => b.style.display = '');
             clearInputs();
+            document.getElementById('transferDataSection').style.display = entries.length > 0 ? 'block' : 'none';
             document.getElementById('addEntryModal').classList.add('active');
         }
-        function copyPreviousEntry() {
-            if (entries.length === 0) { alert('Keine vorherigen Einträge vorhanden'); return; }
+
+        function transferPreviousData() {
+            if (entries.length === 0) return;
             const latest = entries[0];
             accounts.forEach(acc => {
                 const val = latest[acc.id];
-                document.getElementById(acc.id).value = val ? val : '';
-            });
-        }
-        function copyPreviousBank(prefix) {
-            if (entries.length === 0) { alert('Keine vorherigen Einträge vorhanden'); return; }
-            const latest = entries[0];
-            accounts.filter(acc => acc.id.startsWith(prefix + '_')).forEach(acc => {
-                const val = latest[acc.id];
-                document.getElementById(acc.id).value = val ? val : '';
+                const input = document.getElementById(acc.id);
+                if (input) input.value = val ? val : '';
             });
         }
         function showCompareModal() { document.getElementById('compareModal').classList.add('active'); document.getElementById('comparisonResult').innerHTML = ''; }
