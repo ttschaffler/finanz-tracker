@@ -252,6 +252,13 @@
         .time-btn { padding: 0.35rem 0.85rem; background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 8px; font-family: 'Work Sans', sans-serif; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
         .time-btn:hover { border-color: var(--accent-gold); color: var(--text-primary); }
         .time-btn.active { background: var(--accent-gold); color: var(--bg-primary); border-color: var(--accent-gold); font-weight: 600; }
+        /* ── Tab Navigation ── */
+        .tab-nav { display: flex; gap: 0; margin-bottom: 2rem; background: var(--bg-card); border-radius: 12px; padding: 0.25rem; border: 1px solid var(--border); animation: fadeIn 0.8s ease-out 0.15s both; }
+        .tab-btn { flex: 1; padding: 0.75rem 1.5rem; border: none; border-radius: 10px; font-family: 'Work Sans', sans-serif; font-size: 0.95rem; font-weight: 500; cursor: pointer; transition: all 0.3s ease; background: transparent; color: var(--text-secondary); }
+        .tab-btn.active { background: linear-gradient(135deg, var(--accent-gold) 0%, #c9a635 100%); color: var(--bg-primary); font-weight: 600; box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3); }
+        .tab-btn:not(.active):hover { color: var(--text-primary); background: var(--bg-secondary); }
+        .tab-page { display: none; }
+        .tab-page.active { display: block; animation: fadeIn 0.3s ease-out; }
     </style>
 </head>
 <body>
@@ -273,6 +280,13 @@
             <div class="header-user" id="headerUser"></div>
         </header>
 
+        <div class="tab-nav">
+            <button class="tab-btn active" onclick="switchTab('vermoegen')">Vermögensübersicht</button>
+            <button class="tab-btn" onclick="switchTab('rentenluecke')">Rentenlücke</button>
+            <button class="tab-btn" onclick="switchTab('rentenluecke2')">Rentenlücke 2</button>
+        </div>
+
+        <div id="tab-vermoegen" class="tab-page active">
         <div class="controls">
             <button class="btn btn-primary" onclick="showAddEntryModal()">+ Neuer Eintrag</button>
             <button class="btn btn-secondary" onclick="showCompareModal()">Vergleichen</button>
@@ -401,7 +415,6 @@
             <h2 class="section-title">Verlauf</h2>
             <div id="historyContent"></div>
         </div>
-    </div>
 
     <!-- Modal: Neuer Eintrag -->
     <div class="modal" id="addEntryModal">
@@ -412,7 +425,11 @@
                     <label>Datum</label>
                     <input type="date" id="entryDate" required>
                 </div>
-                <button class="btn btn-secondary copy-all-btn" id="copyPreviousBtn" onclick="copyPreviousEntry()" style="margin-bottom: 1rem; font-size: 0.85rem;">Alle Werte vom letzten Eintrag übernehmen</button>
+                <div id="transferDataSection" style="margin-bottom: 1rem;">
+                    <button class="btn btn-secondary" id="transferDataBtn" onclick="transferPreviousData()" style="width: 100%; padding: 0.75rem; font-size: 0.9rem; border: 1px dashed var(--accent-gold); color: var(--accent-gold); background: transparent; cursor: pointer;">
+                        &#8635; Vorherige Daten übernehmen
+                    </button>
+                </div>
                 <div class="banks-container">
                     <div class="bank-column">
                         <div class="bank-header">MLP <button class="copy-bank-btn" onclick="copyPreviousBank('mlp')" title="Werte übernehmen">&#x25C0;</button></div>
@@ -745,9 +762,9 @@
             let html = `
                 <table class="history-table">
                     <thead><tr>
-                        <th>Datum</th><th>Gesamt Konten</th><th>Gesamt Depots</th><th>Gesamtvermögen</th><th>Aktionen</th>
+                        <th>Datum</th><th>Gesamt Konten</th><th>Gesamt Depots</th><th>Gesamtvermögen</th><th>Differenz</th><th>Aktionen</th>
                     </tr></thead><tbody>`;
-            list.forEach(entry => {
+            list.forEach((entry, idx) => {
                 let totalKonto = 0, totalDepot = 0, totalLTA = 0;
                 accounts.forEach(acc => {
                     const v = entry[acc.id] || 0;
@@ -756,12 +773,26 @@
                     else if (acc.type === 'lta') totalLTA += v;
                 });
                 const total = totalKonto + totalDepot + totalLTA;
+
+                // Differenz zum vorherigen Eintrag (Liste ist neueste zuerst, also idx+1 = älter)
+                let diffHtml = '<span style="color: var(--text-secondary);">–</span>';
+                if (idx < list.length - 1) {
+                    const prev = list[idx + 1];
+                    let prevTotal = 0;
+                    accounts.forEach(acc => { prevTotal += (prev[acc.id] || 0); });
+                    const diff = total - prevTotal;
+                    const color = diff >= 0 ? 'var(--accent-emerald)' : 'var(--accent-ruby)';
+                    const prefix = diff >= 0 ? '+' : '';
+                    diffHtml = `<strong style="color: ${color};">${prefix}${formatCurrency(diff)}</strong>`;
+                }
+
                 html += `
                     <tr data-id="${entry.id}" onclick="showEntryDetails(this.dataset.id)">
                         <td>${formatDate(entry.date)}</td>
                         <td>${formatCurrency(totalKonto)}</td>
                         <td>${formatCurrency(totalDepot + totalLTA)}</td>
                         <td><strong>${formatCurrency(total)}</strong></td>
+                        <td>${diffHtml}</td>
                         <td onclick="event.stopPropagation()">
                             <button class="delete-btn" data-id="${entry.id}" onclick="deleteEntry(this.dataset.id)">Löschen</button>
                         </td>
@@ -782,8 +813,7 @@
             });
             document.getElementById('modalTitle').textContent = 'Eintrag bearbeiten – ' + formatDate(entry.date);
             document.getElementById('saveEntryBtn').textContent = 'Änderungen speichern';
-            document.getElementById('copyPreviousBtn').style.display = 'none';
-            document.querySelectorAll('.copy-bank-btn').forEach(b => b.style.display = 'none');
+            document.getElementById('transferDataSection').style.display = 'none';
             document.getElementById('addEntryModal').classList.add('active');
         }
 
@@ -1029,22 +1059,17 @@
             document.getElementById('copyPreviousBtn').style.display = '';
             document.querySelectorAll('.copy-bank-btn').forEach(b => b.style.display = '');
             clearInputs();
+            document.getElementById('transferDataSection').style.display = entries.length > 0 ? 'block' : 'none';
             document.getElementById('addEntryModal').classList.add('active');
         }
-        function copyPreviousEntry() {
-            if (entries.length === 0) { alert('Keine vorherigen Einträge vorhanden'); return; }
+
+        function transferPreviousData() {
+            if (entries.length === 0) return;
             const latest = entries[0];
             accounts.forEach(acc => {
                 const val = latest[acc.id];
-                document.getElementById(acc.id).value = val ? val : '';
-            });
-        }
-        function copyPreviousBank(prefix) {
-            if (entries.length === 0) { alert('Keine vorherigen Einträge vorhanden'); return; }
-            const latest = entries[0];
-            accounts.filter(acc => acc.id.startsWith(prefix + '_')).forEach(acc => {
-                const val = latest[acc.id];
-                document.getElementById(acc.id).value = val ? val : '';
+                const input = document.getElementById(acc.id);
+                if (input) input.value = val ? val : '';
             });
         }
         function showCompareModal() { document.getElementById('compareModal').classList.add('active'); document.getElementById('comparisonResult').innerHTML = ''; }
