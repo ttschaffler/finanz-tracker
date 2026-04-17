@@ -31,6 +31,9 @@ Everything lives in `index.html` (~1400 lines):
     - **L**iskov Substitution: Subtypes must be substitutable for their base types
     - **I**nterface Segregation: Prefer small, focused interfaces over large ones
     - **D**ependency Inversion: Depend on abstractions, not concrete implementations
+ 
+    - You must write automated tests for all code
+    - You must compile the code and pass ALL tests before committing
 
 ## Code Conventions
 
