@@ -259,6 +259,43 @@
         .tab-btn:not(.active):hover { color: var(--text-primary); background: var(--bg-secondary); }
         .tab-page { display: none; }
         .tab-page.active { display: block; animation: fadeIn 0.3s ease-out; }
+
+        /* ── Settings Tab ── */
+        .bank-config-list { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 2rem; }
+        .bank-config-item {
+            display: flex; align-items: center; gap: 1rem;
+            padding: 1rem 1.25rem; background: var(--bg-secondary);
+            border-radius: 12px; border: 1px solid var(--border);
+            transition: border-color 0.2s ease;
+        }
+        .bank-config-item:hover { border-color: var(--accent-gold); }
+        .bank-config-color { width: 6px; align-self: stretch; border-radius: 3px; flex-shrink: 0; }
+        .bank-config-info { flex: 1; min-width: 0; }
+        .bank-config-name { font-weight: 600; color: var(--text-primary); font-size: 1rem; }
+        .bank-config-meta { font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem; }
+        .bank-config-tag {
+            display: inline-block; padding: 0.15rem 0.5rem; border-radius: 6px;
+            background: var(--bg-card); color: var(--text-primary);
+            font-size: 0.75rem; font-weight: 500; margin-right: 0.35rem;
+            border: 1px solid var(--border);
+        }
+        .settings-subtitle {
+            font-family: 'Playfair Display', serif; font-size: 1.25rem;
+            margin: 1.5rem 0 1rem; color: var(--text-primary);
+        }
+        .settings-hint { color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem; }
+        .settings-form-row {
+            display: grid; grid-template-columns: 2fr 1fr 80px; gap: 1rem;
+            align-items: end; margin-bottom: 1rem;
+        }
+        .settings-types-row {
+            display: flex; gap: 1.5rem; align-items: center;
+            padding: 0.75rem 1rem; background: var(--bg-secondary);
+            border: 1px solid var(--border); border-radius: 10px;
+        }
+        @media (max-width: 640px) {
+            .settings-form-row { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -283,6 +320,7 @@
         <div class="tab-nav">
             <button class="tab-btn active" onclick="switchTab('vermoegen')">Vermögensübersicht</button>
             <button class="tab-btn" onclick="switchTab('rentenluecke')">Rentenlücke</button>
+            <button class="tab-btn" onclick="switchTab('einstellungen')">Einstellungen</button>
         </div>
 
         <div id="tab-vermoegen" class="tab-page active">
@@ -500,6 +538,48 @@
         </div>
     </div> <!-- /tab-rentenluecke -->
 
+    <div id="tab-einstellungen" class="tab-page">
+        <div class="input-section" style="max-width: 900px; margin-left: auto; margin-right: auto;">
+            <h2 class="section-title">Banken verwalten</h2>
+            <p class="settings-hint">
+                Füge neue Banken hinzu oder entferne bestehende. Bestehende Eintragsdaten bleiben in der Datenbank erhalten,
+                werden jedoch nach dem Entfernen einer Bank nicht mehr angezeigt.
+            </p>
+
+            <h3 class="settings-subtitle">Aktuelle Banken</h3>
+            <div id="banksConfigList" class="bank-config-list"></div>
+
+            <h3 class="settings-subtitle">Neue Bank hinzufügen</h3>
+            <div class="settings-form-row">
+                <div class="input-group">
+                    <label>Bezeichnung *</label>
+                    <input type="text" id="settings_newLabel" placeholder="z.B. ING DiBa" maxlength="30">
+                </div>
+                <div class="input-group">
+                    <label>Kurzname / Prefix *</label>
+                    <input type="text" id="settings_newPrefix" placeholder="z.B. ing" maxlength="16">
+                </div>
+                <div class="input-group">
+                    <label>Farbe</label>
+                    <input type="color" id="settings_newColor" value="#8b5cf6" style="width: 100%; height: 42px; padding: 0.25rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; cursor: pointer;">
+                </div>
+            </div>
+            <div class="input-group" style="margin-bottom: 1rem;">
+                <label>Kontotypen * (mindestens einer)</label>
+                <div class="settings-types-row">
+                    <label class="chart-checkbox"><input type="checkbox" id="settings_typeKonto"><span>Konto</span></label>
+                    <label class="chart-checkbox"><input type="checkbox" id="settings_typeDepot"><span>Depot</span></label>
+                    <label class="chart-checkbox"><input type="checkbox" id="settings_typeLta"><span>LTA</span></label>
+                </div>
+            </div>
+            <div id="settings_error" style="color: var(--accent-ruby); font-size: 0.9rem; margin-bottom: 1rem; display: none;"></div>
+            <div style="display: flex; gap: 1rem;">
+                <button class="btn btn-primary" onclick="addBankFromForm()" style="flex: 1;">Bank hinzufügen</button>
+                <button class="btn btn-secondary" onclick="resetBanksToDefaults()">Auf Standard zurücksetzen</button>
+            </div>
+        </div>
+    </div> <!-- /tab-einstellungen -->
+
     </div> <!-- /container -->
     </div> <!-- /appContent -->
 
@@ -519,7 +599,7 @@
         const auth = firebase.auth();
 
         // ── Bank Registry (OCP: add a bank here, everything else follows) ──
-        const BANKS = [
+        const DEFAULT_BANKS = [
             { prefix: 'mlp',     label: 'MLP',              cbPrefix: 'MLP',     color: '#8b5cf6', accounts: [{ suffix: 'konto', label: 'Konto' }, { suffix: 'depot', label: 'Depot' }] },
             { prefix: 'consors', label: 'Consors',           cbPrefix: 'Consors', color: '#3b82f6', accounts: [{ suffix: 'konto', label: 'Konto' }, { suffix: 'depot', label: 'Depot' }] },
             { prefix: 'tr',      label: 'Trade Republic',    cbPrefix: 'TR',      color: '#10b981', accounts: [{ suffix: 'konto', label: 'Konto' }, { suffix: 'depot', label: 'Depot' }] },
@@ -530,15 +610,30 @@
             { prefix: 'allianz', label: 'Allianz Riester',   cbPrefix: 'Allianz', color: '#e11d48', accounts: [{ suffix: 'konto', label: 'Konto' }] }
         ];
 
-        // Derived flat accounts list (from registry)
-        const accounts = BANKS.flatMap(bank =>
-            bank.accounts.map(acc => ({
-                id: `${bank.prefix}_${acc.suffix}`,
-                label: `${bank.label} ${acc.label}`,
-                type: acc.suffix === 'lta' ? 'lta' : acc.suffix,
-                bankPrefix: bank.prefix
-            }))
-        );
+        // Deep clone helper so in-memory edits don't mutate DEFAULT_BANKS.
+        function cloneBanks(banks) {
+            return banks.map(b => ({ ...b, accounts: b.accounts.map(a => ({ ...a })) }));
+        }
+
+        // Mutable in-memory registry. Contents replaced via applyBankConfig().
+        const BANKS = cloneBanks(DEFAULT_BANKS);
+
+        // Derived flat accounts list (rebuilt whenever BANKS changes).
+        const accounts = [];
+        function rebuildAccounts() {
+            accounts.length = 0;
+            BANKS.forEach(bank => {
+                bank.accounts.forEach(acc => {
+                    accounts.push({
+                        id: `${bank.prefix}_${acc.suffix}`,
+                        label: `${bank.label} ${acc.label}`,
+                        type: acc.suffix === 'lta' ? 'lta' : acc.suffix,
+                        bankPrefix: bank.prefix
+                    });
+                });
+            });
+        }
+        rebuildAccounts();
 
         // ── Time Range Config (OCP) ──────────────────────────────
         const TIME_RANGES = [
@@ -580,6 +675,33 @@
             async remove(id) { return this.collection.doc(id).delete(); }
         };
 
+        // ── BankConfigStore (DIP: wraps Firestore bank config doc) ──
+        const BankConfigStore = {
+            docRef: null,
+            init(ref) { this.docRef = ref; },
+            async load() {
+                if (!this.docRef) return null;
+                try {
+                    const snap = await this.docRef.get();
+                    if (snap.exists) {
+                        const data = snap.data();
+                        if (Array.isArray(data.banks)) return data.banks;
+                    }
+                } catch (err) {
+                    console.error('BankConfig load error:', err);
+                }
+                return null;
+            },
+            async save(banks) {
+                if (!this.docRef) throw new Error('Nicht angemeldet');
+                return this.docRef.set({ banks });
+            },
+            async clear() {
+                if (!this.docRef) throw new Error('Nicht angemeldet');
+                return this.docRef.delete();
+            }
+        };
+
         // ── AppState (DIP: encapsulates global mutable state) ────
         const AppState = {
             entries: [],
@@ -604,21 +726,25 @@
             auth.signOut();
         }
 
-        auth.onAuthStateChanged(user => {
+        auth.onAuthStateChanged(async user => {
             if (user) {
                 AppState.currentUser = user;
                 DataStore.init(db.collection('users').doc(user.uid).collection('entries'));
+                BankConfigStore.init(db.collection('users').doc(user.uid).collection('config').doc('banks'));
                 document.getElementById('loginScreen').style.display  = 'none';
                 document.getElementById('appContent').style.display   = 'block';
                 document.getElementById('headerUser').innerHTML =
                     (user.photoURL ? `<img src="${user.photoURL}" alt="Avatar">` : '') +
                     `<span>${user.displayName || user.email}</span>` +
                     `<button class="btn-logout" onclick="signOutUser()">Abmelden</button>`;
+                const storedBanks = await BankConfigStore.load();
+                applyBankConfig(storedBanks && storedBanks.length ? storedBanks : DEFAULT_BANKS);
                 loadChartPreferences();
                 initFirebase();
             } else {
                 AppState.currentUser = null;
                 DataStore.collection = null;
+                BankConfigStore.docRef = null;
                 AppState.entries = [];
                 document.getElementById('loginScreen').style.display  = 'flex';
                 document.getElementById('appContent').style.display   = 'none';
@@ -1151,6 +1277,130 @@
             document.getElementById('bankInputsContainer').innerHTML = generateBankInputs();
         }
 
+        // ── Bank config management (settings tab) ──────────────────
+        // Escape for safe insertion into HTML (bank labels are user-provided).
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+        }
+
+        // Replace BANKS with a new configuration and refresh all derived UI.
+        function applyBankConfig(newBanks) {
+            BANKS.length = 0;
+            BANKS.push(...cloneBanks(newBanks));
+            rebuildAccounts();
+            initDynamicHTML();
+            renderBanksConfigList();
+        }
+
+        function renderBanksConfigList() {
+            const container = document.getElementById('banksConfigList');
+            if (!container) return;
+            if (BANKS.length === 0) {
+                container.innerHTML = `<div class="empty-state" style="padding: 1.5rem;">
+                    <p>Keine Banken konfiguriert. Füge unten eine neue Bank hinzu.</p>
+                </div>`;
+                return;
+            }
+            container.innerHTML = BANKS.map(bank => {
+                const tags = bank.accounts.map(a => `<span class="bank-config-tag">${escapeHtml(a.label)}</span>`).join('');
+                return `<div class="bank-config-item">
+                    <div class="bank-config-color" style="background: ${escapeHtml(bank.color)};"></div>
+                    <div class="bank-config-info">
+                        <div class="bank-config-name">${escapeHtml(bank.label)}</div>
+                        <div class="bank-config-meta">Prefix: <code>${escapeHtml(bank.prefix)}</code> &nbsp;·&nbsp; ${tags}</div>
+                    </div>
+                    <div class="bank-config-actions">
+                        <button class="delete-btn" data-prefix="${escapeHtml(bank.prefix)}" onclick="deleteBank(this.dataset.prefix)">Entfernen</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function showSettingsError(msg) {
+            const el = document.getElementById('settings_error');
+            el.textContent = msg;
+            el.style.display = msg ? 'block' : 'none';
+        }
+
+        function readNewBankFromForm() {
+            const label = document.getElementById('settings_newLabel').value.trim();
+            const prefix = document.getElementById('settings_newPrefix').value.trim().toLowerCase();
+            const color = document.getElementById('settings_newColor').value;
+            const types = [
+                { checked: document.getElementById('settings_typeKonto').checked, suffix: 'konto', label: 'Konto' },
+                { checked: document.getElementById('settings_typeDepot').checked, suffix: 'depot', label: 'Depot' },
+                { checked: document.getElementById('settings_typeLta').checked,   suffix: 'lta',   label: 'LTA' }
+            ].filter(t => t.checked).map(t => ({ suffix: t.suffix, label: t.label }));
+
+            if (!label) return { error: 'Bitte eine Bezeichnung eingeben.' };
+            if (!prefix) return { error: 'Bitte einen Prefix eingeben.' };
+            if (!/^[a-z][a-z0-9_]{0,15}$/.test(prefix)) {
+                return { error: 'Prefix muss mit einem Buchstaben beginnen und darf nur Kleinbuchstaben, Ziffern und _ enthalten (max. 16 Zeichen).' };
+            }
+            if (BANKS.some(b => b.prefix === prefix)) {
+                return { error: `Prefix "${prefix}" wird bereits verwendet.` };
+            }
+            if (BANKS.some(b => b.label.toLowerCase() === label.toLowerCase())) {
+                return { error: `Bezeichnung "${label}" wird bereits verwendet.` };
+            }
+            if (types.length === 0) return { error: 'Bitte mindestens einen Kontotyp auswählen.' };
+
+            // Derive checkbox prefix — used as part of DOM IDs for chart toggles.
+            const cbPrefix = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+            return { bank: { prefix, label, cbPrefix, color, accounts: types } };
+        }
+
+        async function addBankFromForm() {
+            showSettingsError('');
+            const result = readNewBankFromForm();
+            if (result.error) { showSettingsError(result.error); return; }
+            const updated = [...BANKS, result.bank];
+            try {
+                await BankConfigStore.save(updated);
+            } catch (err) {
+                showSettingsError('Speichern fehlgeschlagen: ' + err.message);
+                return;
+            }
+            applyBankConfig(updated);
+            loadChartPreferences();
+            refreshDisplay();
+            // Reset form
+            document.getElementById('settings_newLabel').value = '';
+            document.getElementById('settings_newPrefix').value = '';
+            document.getElementById('settings_typeKonto').checked = false;
+            document.getElementById('settings_typeDepot').checked = false;
+            document.getElementById('settings_typeLta').checked = false;
+        }
+
+        async function deleteBank(prefix) {
+            const bank = BANKS.find(b => b.prefix === prefix);
+            if (!bank) return;
+            if (!confirm(`Bank "${bank.label}" entfernen?\n\nBestehende Eintragsdaten bleiben in der Datenbank erhalten, werden aber nicht mehr angezeigt.`)) return;
+            const updated = BANKS.filter(b => b.prefix !== prefix);
+            try {
+                await BankConfigStore.save(updated);
+            } catch (err) {
+                alert('Speichern fehlgeschlagen: ' + err.message);
+                return;
+            }
+            applyBankConfig(updated);
+            loadChartPreferences();
+            refreshDisplay();
+        }
+
+        async function resetBanksToDefaults() {
+            if (!confirm('Alle Banken auf den Standard zurücksetzen? Individuelle Anpassungen gehen verloren.')) return;
+            try {
+                await BankConfigStore.clear();
+            } catch (err) {
+                alert('Zurücksetzen fehlgeschlagen: ' + err.message);
+                return;
+            }
+            applyBankConfig(DEFAULT_BANKS);
+            loadChartPreferences();
+            refreshDisplay();
+        }
+
         // ── Tab Navigation ───────────────────────────────────────
         function switchTab(tabName) {
             document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
@@ -1158,6 +1408,7 @@
             document.getElementById('tab-' + tabName).classList.add('active');
             document.querySelector(`.tab-btn[onclick="switchTab('${tabName}')"]`).classList.add('active');
             if (tabName === 'rentenluecke') loadRL2Data();
+            if (tabName === 'einstellungen') renderBanksConfigList();
         }
 
         // ── Rentenlücke – Daten speichern/laden ──────────────────
