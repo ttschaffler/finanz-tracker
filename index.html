@@ -1546,9 +1546,27 @@
                 const el = document.getElementById(id);
                 if (el) el.addEventListener('input', saveRL2Data);
             });
+            // When a bAV-Gesamtkapital (or the payout period) is given, the
+            // Betriebsrente is derived automatically.
+            ['rl2_bav_kapital', 'rl2_entnahmezeitraum'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', recomputeBetriebsrenteFromKapital);
+            });
             loadRL2Data();
             updateLtaFieldsVisibility();
         });
+
+        // Derive the monthly Betriebsrente from the bAV-Gesamtkapital field
+        // (Kapital ÷ Entnahmezeitraum ÷ 12). No-op while no capital is given,
+        // so a manually entered Betriebsrente is preserved.
+        function recomputeBetriebsrenteFromKapital() {
+            const kapital = parseFloat(document.getElementById('rl2_bav_kapital').value);
+            if (isNaN(kapital) || kapital <= 0) return;
+            const jahre = parseInt(document.getElementById('rl2_entnahmezeitraum').value);
+            if (!jahre || jahre <= 0) return;
+            document.getElementById('rl2_betriebsrente').value = annuitizeMonthly(kapital, jahre).toFixed(2);
+            saveRL2Data();
+        }
 
         function uebernahmeVermoegen2() {
             if (AppState.entries.length === 0) { alert('Keine Einträge vorhanden'); return; }
@@ -1620,6 +1638,7 @@
                 return;
             }
             document.getElementById('rl2_bav_kapital').value = bav.toFixed(2);
+            recomputeBetriebsrenteFromKapital();
             saveRL2Data();
         }
 

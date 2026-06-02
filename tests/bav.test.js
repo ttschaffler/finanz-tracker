@@ -68,14 +68,22 @@ sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 // `const`/`function` at top level don't attach to the context, so re-export the
 // symbols we want to test (the appended code shares the script's scope).
-const exportLine = '\nObject.assign(globalThis, { accounts, BANKS, Settings, AppState, isBav, isRiester, calculateTotals, annuitizeMonthly, bavIndicator, riesterIndicator, currentBavKapital, currentBetriebsrenteMonatlich });';
+const exportLine = '\nObject.assign(globalThis, { accounts, BANKS, Settings, AppState, isBav, isRiester, calculateTotals, annuitizeMonthly, bavIndicator, riesterIndicator, currentBavKapital, currentBetriebsrenteMonatlich, recomputeBetriebsrenteFromKapital });';
 vm.runInContext(scriptSrc + exportLine, sandbox);
 
-const { accounts, Settings, AppState, isBav, isRiester, calculateTotals, annuitizeMonthly, bavIndicator, riesterIndicator, currentBavKapital, currentBetriebsrenteMonatlich } = sandbox;
+const { accounts, Settings, AppState, isBav, isRiester, calculateTotals, annuitizeMonthly, bavIndicator, riesterIndicator, currentBavKapital, currentBetriebsrenteMonatlich, recomputeBetriebsrenteFromKapital } = sandbox;
 
 // Stub document.getElementById to serve values from a plain id→value map.
 function stubFields(map) {
     sandbox.document.getElementById = id => ({ value: map[id] !== undefined ? map[id] : '' });
+}
+
+// Like stubFields, but returns persistent element objects so writes stick.
+function stubElements(map) {
+    const els = {};
+    Object.keys(map).forEach(id => { els[id] = { value: map[id] }; });
+    sandbox.document.getElementById = id => (els[id] || (els[id] = { value: '' }));
+    return els;
 }
 
 // Reset persisted settings + cache between tests for isolation.
@@ -221,6 +229,20 @@ test('currentBetriebsrenteMonatlich needs a payout period', () => {
     AppState.entries = [];
     stubFields({ rl2_bav_kapital: '60000', rl2_entnahmezeitraum: '' });
     assert.strictEqual(currentBetriebsrenteMonatlich(), null);
+});
+
+test('recomputeBetriebsrenteFromKapital derives the monthly Betriebsrente automatically', () => {
+    reset();
+    const els = stubElements({ rl2_bav_kapital: '60000', rl2_entnahmezeitraum: '25', rl2_betriebsrente: '' });
+    recomputeBetriebsrenteFromKapital();
+    assert.strictEqual(els.rl2_betriebsrente.value, (200).toFixed(2)); // 60000/(25*12)
+});
+
+test('recomputeBetriebsrenteFromKapital is a no-op without capital (manual value kept)', () => {
+    reset();
+    const els = stubElements({ rl2_bav_kapital: '', rl2_entnahmezeitraum: '25', rl2_betriebsrente: '350.00' });
+    recomputeBetriebsrenteFromKapital();
+    assert.strictEqual(els.rl2_betriebsrente.value, '350.00');
 });
 
 // ── Runner ────────────────────────────────────────────────────────────────
