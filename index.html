@@ -144,6 +144,13 @@
             cursor: help; margin-left: 0.35rem; vertical-align: middle;
         }
         .info-icon:hover { border-color: var(--accent-gold); color: var(--accent-gold); }
+        /* Rentenlücke: align inputs within a grid row even when labels wrap to
+           different line counts. Grid stretches every cell to equal height, so
+           bottom-anchoring the control lines them all up at the same height. */
+        #tab-rentenluecke .input-group { display: flex; flex-direction: column; }
+        #tab-rentenluecke .input-group > input,
+        #tab-rentenluecke .input-group > select,
+        #tab-rentenluecke .input-group > div { margin-top: auto; }
         .section-title {
             font-family: 'Playfair Display', serif; font-size: 1.75rem; font-weight: 600;
             margin-bottom: 1rem; display: flex; align-items: center; gap: 0.75rem;
