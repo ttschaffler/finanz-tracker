@@ -399,12 +399,16 @@
                         <span>Depots</span>
                     </label>
                     <label class="chart-checkbox">
-                        <input type="checkbox" id="showMSCI" onchange="updateChartDisplay()">
-                        <span>MSCI World (8%)</span>
+                        <input type="checkbox" id="showBav" checked onchange="updateChartDisplay()">
+                        <span>Betriebliche Altersvorsorge 🏢</span>
                     </label>
                     <label class="chart-checkbox">
-                        <input type="checkbox" id="showInflation" onchange="updateChartDisplay()">
-                        <span>Inflation (2,5%)</span>
+                        <input type="checkbox" id="showLta" checked onchange="updateChartDisplay()">
+                        <span>Lebensarbeitszeitkonto ⏳</span>
+                    </label>
+                    <label class="chart-checkbox">
+                        <input type="checkbox" id="showRiester" checked onchange="updateChartDisplay()">
+                        <span>Riester 🅁</span>
                     </label>
                     <button class="btn-small" onclick="toggleBankDetails()">
                         <span id="bankToggleText">+ Einzelne Banken</span>
@@ -1196,7 +1200,7 @@
         // ── Chart ─────────────────────────────────────────────────────
         // ── Chart Preferences (OCP: derived from bank registry) ─────
         function getChartCheckboxIds() {
-            const ids = ['showTotal', 'showKonten', 'showDepots', 'showMSCI', 'showInflation'];
+            const ids = ['showTotal', 'showKonten', 'showDepots', 'showBav', 'showLta', 'showRiester'];
             BANKS.forEach(bank => {
                 if (bank.accounts.length > 1) ids.push(`show${bank.cbPrefix}_Gesamt`);
                 bank.accounts.forEach(acc => {
@@ -1219,7 +1223,7 @@
         function loadChartPreferences() {
             const prefs = Storage.get(PREFS_KEY);
             if (!prefs) return;
-            const defaults = { showTotal: true, showKonten: true, showDepots: true };
+            const defaults = { showTotal: true, showKonten: true, showDepots: true, showBav: true, showLta: true, showRiester: true };
             Object.entries(prefs).forEach(([k, v]) => {
                 const el = document.getElementById(k);
                 if (el) el.checked = v ?? (defaults[k] ?? false);
@@ -1241,10 +1245,6 @@
         function updateChartDisplay() { saveChartPreferences(); renderChart(getFilteredEntries()); }
 
         // ── Chart helpers (SRP) ───────────────────────────────────────
-        function yearsBetween(d1, d2) {
-            return (new Date(d2) - new Date(d1)) / (365.25 * 24 * 3600 * 1000);
-        }
-
         function makeChartLine(label, data, color, ctx, opts = {}) {
             const grad = opts.fill ? (() => {
                 const g = ctx.createLinearGradient(0, 0, 0, 400);
@@ -1264,9 +1264,8 @@
         }
 
         // OCP: bank datasets derived from BANKS registry
-        function buildBankDatasets(sorted, forecastCount, ctx, forecastSeg) {
+        function buildBankDatasets(sorted, ctx) {
             const checked = id => { const el = document.getElementById(id); return el && el.checked; };
-            const nf = n => Array(n).fill(null);
             const datasets = [];
             const DASH_MAP = { konto: [5, 5], depot: [], lta: [2, 2] };
 
@@ -1278,7 +1277,7 @@
                         const fieldIds = bank.accounts.map(a => `${bank.prefix}_${a.suffix}`);
                         datasets.push(makeChartLine(
                             `${bank.label} Gesamt`,
-                            [...sorted.map(e => fieldIds.reduce((s, f) => s + (e[f] || 0), 0)), ...nf(forecastCount)],
+                            sorted.map(e => fieldIds.reduce((s, f) => s + (e[f] || 0), 0)),
                             bank.color, ctx, { width: 2.5, pointRadius: 4 }
                         ));
                     }
@@ -1290,37 +1289,13 @@
                     if (checked(cbId)) {
                         datasets.push(makeChartLine(
                             `${bank.label} ${acc.label}`,
-                            [...sorted.map(e => e[fieldId] || 0), ...nf(forecastCount)],
+                            sorted.map(e => e[fieldId] || 0),
                             bank.color, ctx, { dash: DASH_MAP[acc.suffix] || [] }
                         ));
                     }
                 });
             });
             return datasets;
-        }
-
-        function createDividerPlugin(historicalLength, totalLength) {
-            return {
-                id: 'forecastDivider',
-                afterDraw(chart) {
-                    if (historicalLength >= totalLength) return;
-                    const { ctx: c, scales: { x, y } } = chart;
-                    const px = x.getPixelForValue(historicalLength - 1);
-                    c.save();
-                    c.strokeStyle = 'rgba(148,163,184,0.3)';
-                    c.lineWidth = 1;
-                    c.setLineDash([5, 4]);
-                    c.beginPath();
-                    c.moveTo(px, y.top);
-                    c.lineTo(px, y.bottom);
-                    c.stroke();
-                    c.setLineDash([]);
-                    c.font = '11px "Work Sans", sans-serif';
-                    c.fillStyle = 'rgba(148,163,184,0.55)';
-                    c.fillText('Prognose \u25b6', px + 6, y.top + 16);
-                    c.restore();
-                }
-            };
         }
 
         function buildChartOptions() {
@@ -1352,60 +1327,41 @@
             if (list.length === 0) return;
 
             const sorted = [...list].reverse();
-            const historicalLength = sorted.length;
-            const checked = id => document.getElementById(id).checked;
-            const nf = n => Array(n).fill(null);
-
-            // Forecast dates
-            const showForecast = checked('showInflation');
-            const lastEntryDate = new Date(sorted[sorted.length - 1].date);
-            const forecastDates = [];
-            if (showForecast) {
-                for (let i = 1; i <= 10; i++) {
-                    const d = new Date(lastEntryDate);
-                    d.setFullYear(d.getFullYear() + i);
-                    forecastDates.push(d.toISOString().split('T')[0]);
-                }
-            }
-            const forecastCount = forecastDates.length;
-            const allDates = [...sorted.map(e => e.date), ...forecastDates];
-            const labels = allDates.map(d => Formatter.date(d));
-            const forecastSeg = { borderDash: c => c.p0DataIndex >= historicalLength - 1 ? [8, 4] : [] };
-
-            // Benchmark values
-            const baseDate = sorted[0].date;
-            const baseTotal = calculateTotals(sorted[0]).total;
-            const msciValues = allDates.map(d => Math.round(baseTotal * Math.pow(1.08, yearsBetween(baseDate, d)) * 100) / 100);
-            const inflValues = allDates.map(d => Math.round(baseTotal * Math.pow(1.025, yearsBetween(baseDate, d)) * 100) / 100);
+            const checked = id => { const el = document.getElementById(id); return el && el.checked; };
+            const labels = sorted.map(e => Formatter.date(e.date));
 
             // Build datasets
             const datasets = [];
             if (checked('showTotal'))
                 datasets.push(makeChartLine('Gesamtvermögen',
-                    [...sorted.map(e => calculateTotals(e).total), ...nf(forecastCount)],
+                    sorted.map(e => calculateTotals(e).total),
                     '#d4af37', ctx, { fill: [212, 175, 55], width: 3, pointRadius: 6 }));
             if (checked('showKonten'))
                 datasets.push(makeChartLine('Konten',
-                    [...sorted.map(e => calculateTotals(e).konten), ...nf(forecastCount)],
+                    sorted.map(e => calculateTotals(e).konten),
                     '#2dd4bf', ctx, { fill: [45, 212, 191], pointRadius: 4 }));
             if (checked('showDepots'))
                 datasets.push(makeChartLine('Depots',
-                    [...sorted.map(e => calculateTotals(e).depots), ...nf(forecastCount)],
+                    sorted.map(e => calculateTotals(e).depots),
                     '#f87171', ctx, { fill: [248, 113, 113], pointRadius: 4 }));
+            if (checked('showBav'))
+                datasets.push(makeChartLine('Betriebliche Altersvorsorge',
+                    sorted.map(e => calculateTotals(e).bav),
+                    '#6366f1', ctx, { pointRadius: 4 }));
+            if (checked('showLta'))
+                datasets.push(makeChartLine('Lebensarbeitszeitkonto',
+                    sorted.map(e => calculateTotals(e).lta),
+                    '#eab308', ctx, { pointRadius: 4 }));
+            if (checked('showRiester'))
+                datasets.push(makeChartLine('Riester',
+                    sorted.map(e => calculateTotals(e).riester),
+                    '#e11d48', ctx, { pointRadius: 4 }));
 
-            datasets.push(...buildBankDatasets(sorted, forecastCount, ctx, forecastSeg));
-
-            if (checked('showMSCI'))
-                datasets.push(makeChartLine('MSCI World (8% p.a.)', msciValues, '#f97316',
-                    ctx, { width: 2, pointRadius: 2, segment: forecastSeg }));
-            if (checked('showInflation'))
-                datasets.push(makeChartLine('Kaufkrafterhalt (2,5% p.a.)', inflValues, '#94a3b8',
-                    ctx, { width: 1.5, pointRadius: 1, segment: forecastSeg }));
+            datasets.push(...buildBankDatasets(sorted, ctx));
 
             AppState.wealthChart = new Chart(ctx, {
                 type: 'line',
                 data: { labels, datasets },
-                plugins: showForecast ? [createDividerPlugin(historicalLength, allDates.length)] : [],
                 options: buildChartOptions()
             });
         }
