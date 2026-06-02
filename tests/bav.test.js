@@ -68,10 +68,10 @@ sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 // `const`/`function` at top level don't attach to the context, so re-export the
 // symbols we want to test (the appended code shares the script's scope).
-const exportLine = '\nObject.assign(globalThis, { accounts, BANKS, Settings, isBav, calculateTotals, annuitizeMonthly, bavIndicator });';
+const exportLine = '\nObject.assign(globalThis, { accounts, BANKS, Settings, isBav, isRiester, calculateTotals, annuitizeMonthly, bavIndicator, riesterIndicator });';
 vm.runInContext(scriptSrc + exportLine, sandbox);
 
-const { accounts, Settings, isBav, calculateTotals, annuitizeMonthly, bavIndicator } = sandbox;
+const { accounts, Settings, isBav, isRiester, calculateTotals, annuitizeMonthly, bavIndicator, riesterIndicator } = sandbox;
 
 // Reset persisted settings + cache between tests for isolation.
 function reset() { store.clear(); Settings._data = null; }
@@ -140,6 +140,54 @@ test('bavIndicator renders icon + German tooltip only for bAV accounts', () => {
     assert.ok(on.includes('title="Betriebliche Altersvorsorge"'));
     assert.ok(on.includes('🏢'));
     assert.strictEqual(bavIndicator(false), '');
+});
+
+test('Riester designation defaults to none and is independently configurable', () => {
+    reset();
+    assert.strictEqual(isRiester('allianz_konto'), false, 'no Riester accounts by default');
+    Settings.setRiesterAccountIds(['allianz_konto']);
+    assert.strictEqual(isRiester('allianz_konto'), true);
+    // A fresh cache must read the same persisted value back.
+    Settings._data = null;
+    assert.strictEqual(isRiester('allianz_konto'), true);
+});
+
+test('bAV and Riester designations are independent (no cross-contamination)', () => {
+    reset();
+    Settings.setBavAccountIds(['adidas_konto']);
+    Settings.setRiesterAccountIds(['allianz_konto']);
+    assert.strictEqual(isBav('adidas_konto'), true);
+    assert.strictEqual(isRiester('adidas_konto'), false);
+    assert.strictEqual(isRiester('allianz_konto'), true);
+    assert.strictEqual(isBav('allianz_konto'), false);
+});
+
+test('calculateTotals sums the Riester pot separately without touching total', () => {
+    reset();
+    Settings.setBavAccountIds(['adidas_konto']);
+    Settings.setRiesterAccountIds(['allianz_konto']);
+    const entry = { adidas_konto: 1000, allianz_konto: 800, consors_depot: 500 };
+    const t = calculateTotals(entry);
+    assert.strictEqual(t.bav, 1000);
+    assert.strictEqual(t.riester, 800);
+    assert.strictEqual(t.total, 2300, 'total is unaffected by bAV/Riester designation');
+});
+
+test('Bestehendes Vermögen takeover excludes both bAV and Riester (no double counting)', () => {
+    reset();
+    Settings.setBavAccountIds(['adidas_konto']);
+    Settings.setRiesterAccountIds(['allianz_konto']);
+    const entry = { adidas_konto: 1000, allianz_konto: 800, consors_depot: 500 };
+    const { total, bav, riester } = calculateTotals(entry);
+    // Mirrors uebernahmeVermoegen2: total - bav - riester.
+    assert.strictEqual(total - bav - riester, 500, 'only the non-bAV, non-Riester rest remains');
+});
+
+test('riesterIndicator renders icon + German tooltip only for Riester accounts', () => {
+    const on = riesterIndicator(true);
+    assert.ok(on.includes('title="Riester-Vorsorge"'));
+    assert.ok(on.includes('🅁'));
+    assert.strictEqual(riesterIndicator(false), '');
 });
 
 // ── Runner ────────────────────────────────────────────────────────────────

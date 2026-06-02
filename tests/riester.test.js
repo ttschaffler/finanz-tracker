@@ -56,10 +56,20 @@ sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
 
 vm.createContext(sandbox);
-const exportLine = '\nObject.assign(globalThis, { berechneNetto, KV_BETRIEB_VOLL, BETRIEBSRENTE_FREIGRENZE_MONAT });';
+const exportLine = '\nObject.assign(globalThis, { berechneNetto, calculateRL2, KV_BETRIEB_VOLL, BETRIEBSRENTE_FREIGRENZE_MONAT });';
 vm.runInContext(scriptSrc + exportLine, sandbox);
 
-const { berechneNetto } = sandbox;
+const { berechneNetto, calculateRL2 } = sandbox;
+
+// Baseline inputs object for calculateRL2 (matches readRL2Inputs' shape).
+function baseInputs(overrides = {}) {
+    return {
+        alter: 40, rentenalter: 67, gesetzlichBrutto: 1500, rentensteigerung: 1.5,
+        betriebsrenteBrutto: 0, riesterBrutto: 0, riesterKapital: 0,
+        wunschrenteNetto: 2500, inflation: 2.0, vermoegen: 100000, verzinsung: 5.0,
+        entnahmezeitraum: 25, istVerheiratet: false, anzahlKinder: 0, ...overrides
+    };
+}
 
 // Common parameters for a single, unmarried pensioner.
 const BEST = 0.83;      // Besteuerungsanteil (fixed for the test)
@@ -108,6 +118,29 @@ test('Riester is taxed like Betriebsrente on income but cheaper overall (no KV/P
     // ...but Riester carries no KV/PV, so its net is higher.
     assert.ok(viaRiester.nettoGesamt > viaBetrieb.nettoGesamt,
         'Riester nets more than an equal Betriebsrente because it is KV-/PV-frei');
+});
+
+test('Riester-Kapital joins the drawdown pot and raises Vermögen bei Renteneintritt', () => {
+    const without = calculateRL2(baseInputs());
+    const withKapital = calculateRL2(baseInputs({ riesterKapital: 50000 }));
+    // 50k extra capital, compounded over (67-40)=27 years at 5%.
+    const expectedExtra = 50000 * Math.pow(1.05, 27);
+    assert.ok(close(withKapital.vermoegenBeiRente - without.vermoegenBeiRente, expectedExtra, 1e-3),
+        'Riester capital is compounded into the retirement pot');
+});
+
+test('Riester-Kapital shrinks the Vermögenslücke (more available capital)', () => {
+    const without = calculateRL2(baseInputs());
+    const withKapital = calculateRL2(baseInputs({ riesterKapital: 50000 }));
+    assert.ok(withKapital.vermoegenslücke <= without.vermoegenslücke,
+        'extra capital can only reduce (never increase) the wealth gap');
+});
+
+test('Riester-Kapital does not change the net pension (it is capital, not income)', () => {
+    const without = calculateRL2(baseInputs());
+    const withKapital = calculateRL2(baseInputs({ riesterKapital: 50000 }));
+    assert.ok(close(without.rentenNettoOhneEntnahme, withKapital.rentenNettoOhneEntnahme),
+        'capital must not affect the taxed monthly pension');
 });
 
 let failed = 0;

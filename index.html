@@ -449,6 +449,11 @@
                     Wähle die Konten/Depots, die als betriebliche Altersvorsorge zählen. bAV wird separat ausgewiesen und fließt als Betriebsrente in die Rentenlücke ein.
                 </p>
                 <div id="bavSettingsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;"></div>
+                <h3 style="font-size: 1rem; margin: 2rem 0 0.5rem;">Riester-Vorsorge 🅁</h3>
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+                    Wähle die Konten/Depots, die als Riester-Vorsorge zählen. Riester wird separat ausgewiesen und kann in der Rentenlücke als verfügbares Kapital übernommen werden.
+                </p>
+                <div id="riesterSettingsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;"></div>
                 <div style="margin-top: 2rem; display: flex; gap: 1rem;">
                     <button class="btn btn-primary" onclick="saveSettings()" style="flex: 1;">Speichern</button>
                     <button class="btn btn-secondary" onclick="closeModal('settingsModal')">Abbrechen</button>
@@ -505,40 +510,49 @@
                     <input type="number" step="0.1" id="rl2_inflation" placeholder="2.5">
                 </div>
             </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                <div class="input-group">
+                    <label>Entnahmezeitraum (Jahre)</label>
+                    <input type="number" id="rl2_entnahmezeitraum" placeholder="25" min="1" max="99">
+                </div>
+            </div>
 
             <!-- Gruppe 2: bAV & Riester-Vermögen -->
             <h3 class="rl-group-title">bAV &amp; Riester-Vermögen</h3>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
                 <div class="input-group">
-                    <label>Betriebsrente brutto (monatl.) 🏢<span class="info-icon" title="Berechnung der monatlichen Betriebsrente:&#10;bAV-Vermögen ÷ (Entnahmezeitraum × 12).&#10;Das angesparte bAV-Kapital wird gleichmäßig und ohne Verzinsung über den Entnahmezeitraum verteilt.&#10;Beispiel: 60.000 € ÷ (25 × 12) = 200 €/Monat.&#10;Betriebsrenten sind voll steuerpflichtig und unterliegen KV- und PV-Beiträgen.">i</span></label>
+                    <label>Betriebsrente brutto (monatl.) 🏢<span class="info-icon" title="Berechnung der monatlichen Betriebsrente:&#10;bAV-Vermögen ÷ (Entnahmezeitraum × 12).&#10;Es zählt ausschließlich das in den Einstellungen als bAV markierte Vermögen.&#10;Das Kapital wird gleichmäßig und ohne Verzinsung über den Entnahmezeitraum verteilt.&#10;Beispiel: 60.000 € ÷ (25 × 12) = 200 €/Monat.&#10;Betriebsrenten sind voll steuerpflichtig und unterliegen KV- und PV-Beiträgen.">i</span></label>
                     <div style="display: flex; gap: 0.5rem;">
                         <input type="number" step="0.01" id="rl2_betriebsrente" placeholder="0.00" style="flex: 1;">
                         <button class="btn btn-secondary" onclick="uebernahmeBetriebsrente2()" title="bAV-Vermögen als monatliche Betriebsrente übernehmen (verteilt über den Entnahmezeitraum)" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
                     </div>
                 </div>
                 <div class="input-group">
-                    <label>Riester-Rente brutto (monatl.)<span class="info-icon" title="Riester-Rente als zusätzliche monatliche Renteneinkunft.&#10;Wird in der Auszahlphase voll versteuert, ist aber für pflichtversicherte Rentner KV-/PV-beitragsfrei.">i</span></label>
+                    <label>Riester-Rente brutto (monatl.) 🅁<span class="info-icon" title="Riester-Rente als zusätzliche monatliche Renteneinkunft.&#10;Wird in der Auszahlphase voll versteuert, ist aber für pflichtversicherte Rentner KV-/PV-beitragsfrei.">i</span></label>
                     <input type="number" step="0.01" id="rl2_riester" placeholder="0.00">
+                </div>
+                <div class="input-group">
+                    <label>Riester-Kapital 🅁<span class="info-icon" title="Angespartes Riester-Kapital, das als verfügbares Kapital über den Entnahmezeitraum entnommen wird.&#10;'Übernehmen' zieht die Summe der in den Einstellungen als Riester markierten Konten/Depots heran.&#10;Es wird zusätzlich zum bestehenden Vermögen verzinst und entnommen.">i</span></label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="number" step="0.01" id="rl2_riester_kapital" placeholder="0.00" style="flex: 1;">
+                        <button class="btn btn-secondary" onclick="uebernahmeRiesterKapital2()" title="Riester-Vermögen als verfügbares Kapital übernehmen" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
+                    </div>
                 </div>
             </div>
 
             <!-- Gruppe 3: Konten- & Depotvermögen -->
             <h3 class="rl-group-title">Konten- &amp; Depotvermögen</h3>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
                 <div class="input-group">
-                    <label>Bestehendes Vermögen (ohne bAV)</label>
+                    <label>Bestehendes Vermögen (ohne bAV &amp; Riester)</label>
                     <div style="display: flex; gap: 0.5rem;">
                         <input type="number" step="0.01" id="rl2_vermoegen" placeholder="0.00" style="flex: 1;">
-                        <button class="btn btn-secondary" onclick="uebernahmeVermoegen2()" title="Gesamtvermögen ohne bAV übernehmen (bAV fließt in die Betriebsrente)" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
+                        <button class="btn btn-secondary" onclick="uebernahmeVermoegen2()" title="Gesamtvermögen ohne bAV und Riester übernehmen (bAV fließt in die Betriebsrente, Riester ins Riester-Kapital)" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
                     </div>
                 </div>
                 <div class="input-group">
                     <label>Verzinsung Vermögen (% p.a.)</label>
                     <input type="number" step="0.1" id="rl2_verzinsung" placeholder="5.0">
-                </div>
-                <div class="input-group">
-                    <label>Entnahmezeitraum (Jahre)</label>
-                    <input type="number" id="rl2_entnahmezeitraum" placeholder="25" min="1" max="99">
                 </div>
             </div>
             <div style="margin-top: 1.5rem;">
@@ -617,10 +631,21 @@
             setBavAccountIds(ids) {
                 this._data = { ...this._load(), bavAccounts: [...ids] };
                 Storage.set(SETTINGS_KEY, this._data);
+            },
+            // Which accounts count as Riester. Defaults to none until configured.
+            getRiesterAccountIds() {
+                const stored = this._load().riesterAccounts;
+                return Array.isArray(stored) ? stored : [];
+            },
+            setRiesterAccountIds(ids) {
+                this._data = { ...this._load(), riesterAccounts: [...ids] };
+                Storage.set(SETTINGS_KEY, this._data);
             }
         };
         // Effective bAV flag for an account id (consults Settings).
         function isBav(accountId) { return Settings.getBavAccountIds().includes(accountId); }
+        // Effective Riester flag for an account id (consults Settings).
+        function isRiester(accountId) { return Settings.getRiesterAccountIds().includes(accountId); }
 
         // Annuitize a bAV lump sum into a flat monthly amount (no growth):
         // the pot is spread evenly across the payout period (Entnahmezeitraum).
@@ -634,6 +659,13 @@
         function bavIndicator(isBavAccount) {
             return isBavAccount
                 ? ' <span class="bav-badge" title="Betriebliche Altersvorsorge" aria-label="Betriebliche Altersvorsorge" role="img">🏢</span>'
+                : '';
+        }
+
+        // ── Indicator helper: marks an account as Riester-Vorsorge ──
+        function riesterIndicator(isRiesterAccount) {
+            return isRiesterAccount
+                ? ' <span class="bav-badge" title="Riester-Vorsorge" aria-label="Riester-Vorsorge" role="img">🅁</span>'
                 : '';
         }
 
@@ -809,14 +841,15 @@
 
         // ── Pure Business Logic ───────────────────────────────────────
         function calculateTotals(entry) {
-            let konten = 0, depots = 0, bav = 0;
+            let konten = 0, depots = 0, bav = 0, riester = 0;
             accounts.forEach(acc => {
                 const v = entry[acc.id] || 0;
                 if (acc.type === 'konto') konten += v;
                 else depots += v;
-                if (isBav(acc.id)) bav += v;   // bAV is orthogonal to konto/depot
+                if (isBav(acc.id)) bav += v;       // bAV is orthogonal to konto/depot
+                if (isRiester(acc.id)) riester += v; // Riester likewise orthogonal
             });
-            return { total: konten + depots, konten, depots, bav };
+            return { total: konten + depots, konten, depots, bav, riester };
         }
 
         function formatChangeValue(newVal, oldVal) {
@@ -956,7 +989,7 @@
                 <thead><tr><th>Konto</th><th>${Formatter.date(e1.date)}</th><th>${Formatter.date(e2.date)}</th><th>Differenz</th></tr></thead><tbody>`;
             accounts.forEach(acc => {
                 const v1 = e1[acc.id] || 0, v2 = e2[acc.id] || 0, diff = v2 - v1;
-                html += `<tr><td>${acc.label}${bavIndicator(isBav(acc.id))}</td><td>${Formatter.currency(v1)}</td><td>${Formatter.currency(v2)}</td>
+                html += `<tr><td>${acc.label}${bavIndicator(isBav(acc.id))}${riesterIndicator(isRiester(acc.id))}</td><td>${Formatter.currency(v1)}</td><td>${Formatter.currency(v2)}</td>
                     <td class="${diff >= 0 ? 'positive' : 'negative'}" style="font-weight:600;">${Formatter.currency(diff)}</td></tr>`;
             });
             html += '</tbody></table></div>';
@@ -1211,11 +1244,12 @@
         function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
         // ── Settings (bAV designation) ───────────────────────────────
-        function generateBavSettings() {
+        // Renders one checkbox grid for a given designation (bAV or Riester).
+        function generateDesignationSettings(cssClass, isSelected) {
             return BANKS.map(bank => {
                 const rows = bank.accounts.map(acc => {
                     const id = `${bank.prefix}_${acc.suffix}`;
-                    return `<label class="chart-checkbox" style="margin-bottom: 0.35rem;"><input type="checkbox" class="bav-setting" value="${id}"${isBav(id) ? ' checked' : ''}><span>${acc.label}</span></label>`;
+                    return `<label class="chart-checkbox" style="margin-bottom: 0.35rem;"><input type="checkbox" class="${cssClass}" value="${id}"${isSelected(id) ? ' checked' : ''}><span>${acc.label}</span></label>`;
                 }).join('');
                 return `<div style="border-left: 3px solid ${bank.color}; padding-left: 0.75rem;">
                     <div style="font-weight: 600; color: ${bank.color}; margin-bottom: 0.5rem; font-size: 0.9rem;">${bank.label}</div>
@@ -1224,16 +1258,19 @@
             }).join('');
         }
         function showSettingsModal() {
-            document.getElementById('bavSettingsGrid').innerHTML = generateBavSettings();
+            document.getElementById('bavSettingsGrid').innerHTML = generateDesignationSettings('bav-setting', isBav);
+            document.getElementById('riesterSettingsGrid').innerHTML = generateDesignationSettings('riester-setting', isRiester);
             document.getElementById('settingsModal').classList.add('active');
         }
         function saveSettings() {
-            const ids = [...document.querySelectorAll('#bavSettingsGrid .bav-setting:checked')].map(cb => cb.value);
-            Settings.setBavAccountIds(ids);
+            const bavIds = [...document.querySelectorAll('#bavSettingsGrid .bav-setting:checked')].map(cb => cb.value);
+            const riesterIds = [...document.querySelectorAll('#riesterSettingsGrid .riester-setting:checked')].map(cb => cb.value);
+            Settings.setBavAccountIds(bavIds);
+            Settings.setRiesterAccountIds(riesterIds);
             applyBavSettings();
             closeModal('settingsModal');
         }
-        // Re-render everything that depends on the bAV designation.
+        // Re-render everything that depends on the bAV/Riester designation.
         function applyBavSettings() {
             initDynamicHTML();
             loadChartPreferences();
@@ -1253,7 +1290,7 @@
                 bank.accounts.forEach((acc, i) => {
                     const cbId = `show${bank.cbPrefix}_${acc.suffix === 'lta' ? 'LTA' : acc.label}`;
                     const isLast = i === bank.accounts.length - 1 && bank.accounts.length <= 1;
-                    checkboxes += `<label class="chart-checkbox"${!isLast ? ' style="margin-bottom: 0.25rem;"' : ''}><input type="checkbox" id="${cbId}" onchange="updateChartDisplay()"><span>${acc.label}${bavIndicator(isBav(`${bank.prefix}_${acc.suffix}`))}</span></label>`;
+                    checkboxes += `<label class="chart-checkbox"${!isLast ? ' style="margin-bottom: 0.25rem;"' : ''}><input type="checkbox" id="${cbId}" onchange="updateChartDisplay()"><span>${acc.label}${bavIndicator(isBav(`${bank.prefix}_${acc.suffix}`))}${riesterIndicator(isRiester(`${bank.prefix}_${acc.suffix}`))}</span></label>`;
                 });
                 return `<div style="border-left: 3px solid ${bank.color}; padding-left: 0.75rem;">
                     <div style="font-weight: 600; color: ${bank.color}; margin-bottom: 0.5rem; font-size: 0.9rem;">${bank.label}</div>
@@ -1266,7 +1303,7 @@
             return BANKS.map(bank => {
                 const inputs = bank.accounts.map((acc, i) => {
                     const isLast = i === bank.accounts.length - 1;
-                    return `<div class="input-group"${!isLast ? ' style="margin-bottom: 0.5rem;"' : ''}><label>${acc.label}${bavIndicator(isBav(`${bank.prefix}_${acc.suffix}`))}</label><input type="number" step="0.01" id="${bank.prefix}_${acc.suffix}" placeholder="0.00"></div>`;
+                    return `<div class="input-group"${!isLast ? ' style="margin-bottom: 0.5rem;"' : ''}><label>${acc.label}${bavIndicator(isBav(`${bank.prefix}_${acc.suffix}`))}${riesterIndicator(isRiester(`${bank.prefix}_${acc.suffix}`))}</label><input type="number" step="0.01" id="${bank.prefix}_${acc.suffix}" placeholder="0.00"></div>`;
                 }).join('');
                 return `<div class="bank-column">
                     <div class="bank-header">${bank.label} <button class="copy-bank-btn" onclick="copyPreviousBank('${bank.prefix}')" title="Werte übernehmen">&#x25C0;</button></div>
@@ -1294,7 +1331,7 @@
 
         // ── Rentenlücke – Daten speichern/laden ──────────────────
         const RL2_STORAGE_KEY = 'rentenluecke2_data';
-        const RL2_FIELDS = ['rl2_alter', 'rl2_rentenalter', 'rl2_verheiratet', 'rl2_kinder', 'rl2_gesetzliche_rente', 'rl2_rentensteigerung', 'rl2_betriebsrente', 'rl2_riester', 'rl2_wunschrente', 'rl2_inflation', 'rl2_vermoegen', 'rl2_verzinsung', 'rl2_entnahmezeitraum'];
+        const RL2_FIELDS = ['rl2_alter', 'rl2_rentenalter', 'rl2_verheiratet', 'rl2_kinder', 'rl2_gesetzliche_rente', 'rl2_rentensteigerung', 'rl2_betriebsrente', 'rl2_riester', 'rl2_riester_kapital', 'rl2_wunschrente', 'rl2_inflation', 'rl2_vermoegen', 'rl2_verzinsung', 'rl2_entnahmezeitraum'];
 
         function saveRL2Data() {
             const data = {};
@@ -1323,9 +1360,22 @@
 
         function uebernahmeVermoegen2() {
             if (AppState.entries.length === 0) { alert('Keine Einträge vorhanden'); return; }
-            // bAV is represented via the Betriebsrente, so exclude it here to avoid double counting.
-            const { total, bav } = calculateTotals(AppState.entries[0]);
-            document.getElementById('rl2_vermoegen').value = (total - bav).toFixed(2);
+            // bAV feeds the Betriebsrente and Riester feeds the Riester-Kapital,
+            // so exclude both here to avoid double counting.
+            const { total, bav, riester } = calculateTotals(AppState.entries[0]);
+            document.getElementById('rl2_vermoegen').value = (total - bav - riester).toFixed(2);
+            saveRL2Data();
+        }
+
+        // Pull the Riester pot as available capital (drawn down over the Entnahmezeitraum).
+        function uebernahmeRiesterKapital2() {
+            if (AppState.entries.length === 0) { alert('Keine Einträge vorhanden'); return; }
+            const riester = calculateTotals(AppState.entries[0]).riester;
+            if (riester <= 0) {
+                alert('Kein Riester-Vermögen vorhanden. Markiere zuerst ein Konto/Depot in den Einstellungen als Riester.');
+                return;
+            }
+            document.getElementById('rl2_riester_kapital').value = riester.toFixed(2);
             saveRL2Data();
         }
 
@@ -1464,6 +1514,7 @@
             const rentensteigerung = parseFloat(document.getElementById('rl2_rentensteigerung').value);
             const betriebsrenteBrutto = parseFloat(document.getElementById('rl2_betriebsrente').value) || 0;
             const riesterBrutto = parseFloat(document.getElementById('rl2_riester').value) || 0;
+            const riesterKapital = parseFloat(document.getElementById('rl2_riester_kapital').value) || 0;
             const wunschrenteNetto = parseFloat(document.getElementById('rl2_wunschrente').value);
             const inflation = parseFloat(document.getElementById('rl2_inflation').value);
             const vermoegen = parseFloat(document.getElementById('rl2_vermoegen').value) || 0;
@@ -1478,11 +1529,11 @@
             if (rentenalter <= alter) {
                 return null;
             }
-            return { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, riesterBrutto, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder };
+            return { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, riesterBrutto, riesterKapital, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder };
         }
 
         function calculateRL2(inputs) {
-            const { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, riesterBrutto, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
+            const { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, riesterBrutto, riesterKapital, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
             const aktuellesJahr = new Date().getFullYear();
             const jahresBisRente = rentenalter - alter;
             const renteneintrittsjahr = aktuellesJahr + jahresBisRente;
@@ -1491,7 +1542,9 @@
             const steigRate = rentensteigerung / 100;
             const gesetzlichBeiRente = gesetzlichBrutto;
             const bestAnteil = besteuerungsanteil(renteneintrittsjahr);
-            const vermoegenBeiRente = vermoegen * Math.pow(1 + verzRate, jahresBisRente);
+            // Riester capital joins the available wealth pot and is drawn down alongside it.
+            const startVermoegen = vermoegen + riesterKapital;
+            const vermoegenBeiRente = startVermoegen * Math.pow(1 + verzRate, jahresBisRente);
             const wunschNettoBeiRente = wunschrenteNetto * Math.pow(1 + inflRate, jahresBisRente);
             const pvSatz = pvRentnerSatz(anzahlKinder);
 
@@ -1544,7 +1597,7 @@
 
         function renderRL2Results(results, inputs) {
             const { jahresBisRente, renteneintrittsjahr, bestAnteil, vermoegenBeiRente, wunschNettoBeiRente, gesetzlichBeiRente, rentenNettoOhneEntnahme, benoetigteEntnahmeMonat1, benoetigtesKapital, vermoegenslücke, monatlicheSparrate, ohnEntnahme: r, pvSatz } = results;
-            const { betriebsrenteBrutto, riesterBrutto, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
+            const { betriebsrenteBrutto, riesterBrutto, riesterKapital, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
             const container = document.getElementById('rl2Result');
             container.innerHTML = `
                 <div style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border);">
@@ -1566,6 +1619,9 @@
                         </div>
                         <div style="font-size: 0.85rem; color: var(--text-secondary);">
                             Riester-Rente brutto: <strong style="color: var(--text-primary);">${formatCurrency(riesterBrutto)}</strong>
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                            Riester-Kapital: <strong style="color: var(--text-primary);">${formatCurrency(riesterKapital)}</strong>
                         </div>
                         <div style="font-size: 0.85rem; color: var(--text-secondary);">
                             PV-Satz: <strong style="color: var(--text-primary);">${(pvSatz * 100).toFixed(1)} %</strong> (${anzahlKinder > 0 ? anzahlKinder + (anzahlKinder === 1 ? ' Kind' : ' Kinder') : 'kinderlos'})
