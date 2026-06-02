@@ -125,6 +125,11 @@
         }
         .input-group input:focus { outline: none; border-color: var(--accent-gold); box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1); }
         .input-group input::placeholder { color: var(--text-secondary); opacity: 0.5; }
+        .bav-badge {
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 0.8em; line-height: 1; cursor: help; vertical-align: middle;
+            margin-left: 0.3rem; filter: grayscale(0.1);
+        }
         .section-title {
             font-family: 'Playfair Display', serif; font-size: 1.75rem; font-weight: 600;
             margin-bottom: 1rem; display: flex; align-items: center; gap: 0.75rem;
@@ -525,7 +530,7 @@
             { prefix: 'tr',      label: 'Trade Republic',    cbPrefix: 'TR',      color: '#10b981', accounts: [{ suffix: 'konto', label: 'Konto' }, { suffix: 'depot', label: 'Depot' }] },
             { prefix: 'vb',      label: 'Volksbank',         cbPrefix: 'VB',      color: '#f59e0b', accounts: [{ suffix: 'konto', label: 'Konto' }, { suffix: 'depot', label: 'Depot' }] },
             { prefix: 'ui',      label: 'Union Investment',  cbPrefix: 'UI',      color: '#ec4899', accounts: [{ suffix: 'depot', label: 'Depot' }] },
-            { prefix: 'adidas',  label: 'adidas',            cbPrefix: 'Adidas',  color: '#6366f1', accounts: [{ suffix: 'konto', label: 'Konto' }, { suffix: 'depot', label: 'Depot' }, { suffix: 'lta', label: 'LTA' }] },
+            { prefix: 'adidas',  label: 'adidas',            cbPrefix: 'Adidas',  color: '#6366f1', accounts: [{ suffix: 'konto', label: 'Konto', bav: true }, { suffix: 'depot', label: 'Depot' }, { suffix: 'lta', label: 'LTA' }] },
             { prefix: 'coba',    label: 'Commerzbank',       cbPrefix: 'Coba',    color: '#14b8a6', accounts: [{ suffix: 'depot', label: 'Depot' }] },
             { prefix: 'allianz', label: 'Allianz Riester',   cbPrefix: 'Allianz', color: '#e11d48', accounts: [{ suffix: 'konto', label: 'Konto' }] }
         ];
@@ -536,9 +541,18 @@
                 id: `${bank.prefix}_${acc.suffix}`,
                 label: `${bank.label} ${acc.label}`,
                 type: acc.suffix === 'lta' ? 'lta' : acc.suffix,
-                bankPrefix: bank.prefix
+                bankPrefix: bank.prefix,
+                bav: acc.bav === true
             }))
         );
+
+        // ── Indicator helper: marks an account as company pension (bAV) ──
+        // Renders an icon + German tooltip, or an empty string for non-bAV accounts.
+        function bavIndicator(isBav) {
+            return isBav
+                ? ' <span class="bav-badge" title="Betriebliche Altersvorsorge" aria-label="Betriebliche Altersvorsorge" role="img">🏢</span>'
+                : '';
+        }
 
         // ── Time Range Config (OCP) ──────────────────────────────
         const TIME_RANGES = [
@@ -857,7 +871,7 @@
                 <thead><tr><th>Konto</th><th>${Formatter.date(e1.date)}</th><th>${Formatter.date(e2.date)}</th><th>Differenz</th></tr></thead><tbody>`;
             accounts.forEach(acc => {
                 const v1 = e1[acc.id] || 0, v2 = e2[acc.id] || 0, diff = v2 - v1;
-                html += `<tr><td>${acc.label}</td><td>${Formatter.currency(v1)}</td><td>${Formatter.currency(v2)}</td>
+                html += `<tr><td>${acc.label}${bavIndicator(acc.bav)}</td><td>${Formatter.currency(v1)}</td><td>${Formatter.currency(v2)}</td>
                     <td class="${diff >= 0 ? 'positive' : 'negative'}" style="font-weight:600;">${Formatter.currency(diff)}</td></tr>`;
             });
             html += '</tbody></table></div>';
@@ -1124,7 +1138,7 @@
                 bank.accounts.forEach((acc, i) => {
                     const cbId = `show${bank.cbPrefix}_${acc.suffix === 'lta' ? 'LTA' : acc.label}`;
                     const isLast = i === bank.accounts.length - 1 && bank.accounts.length <= 1;
-                    checkboxes += `<label class="chart-checkbox"${!isLast ? ' style="margin-bottom: 0.25rem;"' : ''}><input type="checkbox" id="${cbId}" onchange="updateChartDisplay()"><span>${acc.label}</span></label>`;
+                    checkboxes += `<label class="chart-checkbox"${!isLast ? ' style="margin-bottom: 0.25rem;"' : ''}><input type="checkbox" id="${cbId}" onchange="updateChartDisplay()"><span>${acc.label}${bavIndicator(acc.bav)}</span></label>`;
                 });
                 return `<div style="border-left: 3px solid ${bank.color}; padding-left: 0.75rem;">
                     <div style="font-weight: 600; color: ${bank.color}; margin-bottom: 0.5rem; font-size: 0.9rem;">${bank.label}</div>
@@ -1137,7 +1151,7 @@
             return BANKS.map(bank => {
                 const inputs = bank.accounts.map((acc, i) => {
                     const isLast = i === bank.accounts.length - 1;
-                    return `<div class="input-group"${!isLast ? ' style="margin-bottom: 0.5rem;"' : ''}><label>${acc.label}</label><input type="number" step="0.01" id="${bank.prefix}_${acc.suffix}" placeholder="0.00"></div>`;
+                    return `<div class="input-group"${!isLast ? ' style="margin-bottom: 0.5rem;"' : ''}><label>${acc.label}${bavIndicator(acc.bav)}</label><input type="number" step="0.01" id="${bank.prefix}_${acc.suffix}" placeholder="0.00"></div>`;
                 }).join('');
                 return `<div class="bank-column">
                     <div class="bank-header">${bank.label} <button class="copy-bank-btn" onclick="copyPreviousBank('${bank.prefix}')" title="Werte übernehmen">&#x25C0;</button></div>
