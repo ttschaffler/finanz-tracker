@@ -485,6 +485,11 @@
                     Wähle die Konten/Depots, die als Riester-Vorsorge zählen. Riester wird separat ausgewiesen und kann in der Rentenlücke als verfügbares Kapital übernommen werden.
                 </p>
                 <div id="riesterSettingsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;"></div>
+                <h3 style="font-size: 1rem; margin: 2rem 0 0.5rem;">Lebensarbeitszeitkonto (LTA) ⏳</h3>
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+                    Wähle die Konten/Depots, die als Lebensarbeitszeit-/Zeitwertkonto zählen. Das LTA-Guthaben kann in der Rentenlücke gesondert verwendet werden (Altersteilzeit, monatliche oder einmalige Auszahlung).
+                </p>
+                <div id="ltaSettingsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;"></div>
                 <div style="margin-top: 2rem; display: flex; gap: 1rem;">
                     <button class="btn btn-primary" onclick="saveSettings()" style="flex: 1;">Speichern</button>
                     <button class="btn btn-secondary" onclick="closeModal('settingsModal')">Abbrechen</button>
@@ -571,14 +576,38 @@
                 </div>
             </div>
 
-            <!-- Gruppe 3: Konten- & Depotvermögen -->
+            <!-- Gruppe 3: Lebensarbeitszeitkonto (LTA) -->
+            <h3 class="rl-group-title">Lebensarbeitszeitkonto (LTA) ⏳</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                <div class="input-group">
+                    <label>LTA-Guthaben ⏳<span class="info-icon" title="Angespartes Guthaben auf dem Lebensarbeitszeit-/Zeitwertkonto.&#10;'Übernehmen' zieht die Summe der in den Einstellungen als LTA markierten Konten/Depots heran.">i</span></label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="number" step="0.01" id="rl2_lta_wert" placeholder="0.00" style="flex: 1;">
+                        <button class="btn btn-secondary" onclick="uebernahmeLta2()" title="LTA-Guthaben übernehmen" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Verwendung<span class="info-icon" title="1) Altersteilzeit: Guthaben finanziert eine Freistellung VOR Rentenbeginn – wird hier nur informativ ausgewiesen und fließt NICHT in die Rentenlücke ein.&#10;2) Monatliche Auszahlung ab Rentenbeginn: wird wie eine Betriebsrente über die LTA-Auszahldauer verteilt (voll steuer- und KV-/PV-pflichtig).&#10;3) Einmalauszahlung bei Rentenbeginn: fließt brutto als verfügbares Kapital in den Entnahme-Topf (Einmalbesteuerung wird vereinfacht nicht modelliert).">i</span></label>
+                    <select id="rl2_lta_option" onchange="onLtaOptionChange()" style="width: 100%; padding: 0.75rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px; font-family: 'Work Sans', sans-serif; font-size: 0.95rem;">
+                        <option value="altersteilzeit">Altersteilzeit (vor Rente, informativ)</option>
+                        <option value="monatlich">Monatlich ab Rentenbeginn</option>
+                        <option value="einmal">Einmalbetrag bei Rentenbeginn</option>
+                    </select>
+                </div>
+                <div class="input-group" id="rl2_lta_dauer_group">
+                    <label>LTA-Auszahldauer (Jahre)<span class="info-icon" title="Nur bei monatlicher Auszahlung: Das LTA-Guthaben wird gleichmäßig (ohne Verzinsung) über diese Anzahl Jahre ab Rentenbeginn als monatliche Leistung ausgezahlt.">i</span></label>
+                    <input type="number" id="rl2_lta_dauer" placeholder="10" min="1" max="99">
+                </div>
+            </div>
+
+            <!-- Gruppe 4: Konten- & Depotvermögen -->
             <h3 class="rl-group-title">Konten- &amp; Depotvermögen</h3>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
                 <div class="input-group">
-                    <label>Bestehendes Vermögen (ohne bAV &amp; Riester)</label>
+                    <label>Bestehendes Vermögen (ohne bAV, Riester &amp; LTA)</label>
                     <div style="display: flex; gap: 0.5rem;">
                         <input type="number" step="0.01" id="rl2_vermoegen" placeholder="0.00" style="flex: 1;">
-                        <button class="btn btn-secondary" onclick="uebernahmeVermoegen2()" title="Gesamtvermögen ohne bAV und Riester übernehmen (bAV fließt in die Betriebsrente, Riester ins Riester-Kapital)" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
+                        <button class="btn btn-secondary" onclick="uebernahmeVermoegen2()" title="Gesamtvermögen ohne bAV, Riester und LTA übernehmen" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
                     </div>
                 </div>
                 <div class="input-group">
@@ -595,7 +624,7 @@
             <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
                 <label class="chart-checkbox"><input type="checkbox" id="rl2ShowVermoegen" checked onchange="updateRL2Chart()"><span>Vermögen</span></label>
                 <label class="chart-checkbox"><input type="checkbox" id="rl2ShowNettoBedarf" checked onchange="updateRL2Chart()"><span>Netto-Bedarf (inflationsber.)</span></label>
-                <label class="chart-checkbox"><input type="checkbox" id="rl2ShowNettoRente" checked onchange="updateRL2Chart()"><span>Netto-Rente (gesetzl.+betriebl.+Riester)</span></label>
+                <label class="chart-checkbox"><input type="checkbox" id="rl2ShowNettoRente" checked onchange="updateRL2Chart()"><span>Netto-Rente (alle laufenden Renten)</span></label>
                 <label class="chart-checkbox"><input type="checkbox" id="rl2ShowEntnahme" checked onchange="updateRL2Chart()"><span>Entnahme/Monat</span></label>
             </div>
             <canvas id="rl2Chart"></canvas>
@@ -669,6 +698,18 @@
                 this._data = { ...this._load(), riesterAccounts: [...ids] };
                 Storage.set(SETTINGS_KEY, this._data);
             },
+            // Which accounts count as Lebensarbeitszeitkonto (LTA / Zeitwertkonto).
+            // Defaults to the registry LTA accounts (suffix 'lta').
+            getLtaAccountIds() {
+                const stored = this._load().ltaAccounts;
+                return Array.isArray(stored)
+                    ? stored
+                    : accounts.filter(a => a.defaultLta).map(a => a.id);
+            },
+            setLtaAccountIds(ids) {
+                this._data = { ...this._load(), ltaAccounts: [...ids] };
+                Storage.set(SETTINGS_KEY, this._data);
+            },
             // User-defined banks. Each: { prefix, label, cbPrefix, color, accounts:[{suffix,label}] }.
             getCustomBanks() {
                 const stored = this._load().customBanks;
@@ -690,7 +731,8 @@
                     label: `${bank.label} ${acc.label}`,
                     type: acc.suffix === 'lta' ? 'lta' : acc.suffix,
                     bankPrefix: bank.prefix,
-                    defaultBav: acc.bav === true   // registry default; effective state lives in Settings
+                    defaultBav: acc.bav === true,   // registry default; effective state lives in Settings
+                    defaultLta: acc.suffix === 'lta'
                 }))
             );
         }
@@ -702,6 +744,8 @@
         function isBav(accountId) { return Settings.getBavAccountIds().includes(accountId); }
         // Effective Riester flag for an account id (consults Settings).
         function isRiester(accountId) { return Settings.getRiesterAccountIds().includes(accountId); }
+        // Effective LTA (Lebensarbeitszeitkonto) flag for an account id.
+        function isLta(accountId) { return Settings.getLtaAccountIds().includes(accountId); }
 
         // ── Custom-bank helpers ───────────────────────────────────────
         const BANK_COLOR_PALETTE = ['#0ea5e9', '#a855f7', '#f97316', '#22c55e', '#eab308', '#ef4444', '#06b6d4', '#d946ef', '#84cc16', '#f43f5e'];
@@ -743,6 +787,13 @@
         function riesterIndicator(isRiesterAccount) {
             return isRiesterAccount
                 ? ' <span class="bav-badge" title="Riester-Vorsorge" aria-label="Riester-Vorsorge" role="img">🅁</span>'
+                : '';
+        }
+
+        // ── Indicator helper: marks an account as Lebensarbeitszeitkonto (LTA) ──
+        function ltaIndicator(isLtaAccount) {
+            return isLtaAccount
+                ? ' <span class="bav-badge" title="Lebensarbeitszeitkonto (LTA)" aria-label="Lebensarbeitszeitkonto" role="img">⏳</span>'
                 : '';
         }
 
@@ -913,15 +964,16 @@
 
         // ── Pure Business Logic ───────────────────────────────────────
         function calculateTotals(entry) {
-            let konten = 0, depots = 0, bav = 0, riester = 0;
+            let konten = 0, depots = 0, bav = 0, riester = 0, lta = 0;
             accounts.forEach(acc => {
                 const v = entry[acc.id] || 0;
                 if (acc.type === 'konto') konten += v;
                 else depots += v;
                 if (isBav(acc.id)) bav += v;       // bAV is orthogonal to konto/depot
                 if (isRiester(acc.id)) riester += v; // Riester likewise orthogonal
+                if (isLta(acc.id)) lta += v;         // LTA likewise orthogonal
             });
-            return { total: konten + depots, konten, depots, bav, riester };
+            return { total: konten + depots, konten, depots, bav, riester, lta };
         }
 
         function formatChangeValue(newVal, oldVal) {
@@ -1061,7 +1113,7 @@
                 <thead><tr><th>Konto</th><th>${Formatter.date(e1.date)}</th><th>${Formatter.date(e2.date)}</th><th>Differenz</th></tr></thead><tbody>`;
             accounts.forEach(acc => {
                 const v1 = e1[acc.id] || 0, v2 = e2[acc.id] || 0, diff = v2 - v1;
-                html += `<tr><td>${acc.label}${bavIndicator(isBav(acc.id))}${riesterIndicator(isRiester(acc.id))}</td><td>${Formatter.currency(v1)}</td><td>${Formatter.currency(v2)}</td>
+                html += `<tr><td>${acc.label}${bavIndicator(isBav(acc.id))}${riesterIndicator(isRiester(acc.id))}${ltaIndicator(isLta(acc.id))}</td><td>${Formatter.currency(v1)}</td><td>${Formatter.currency(v2)}</td>
                     <td class="${diff >= 0 ? 'positive' : 'negative'}" style="font-weight:600;">${Formatter.currency(diff)}</td></tr>`;
             });
             html += '</tbody></table></div>';
@@ -1348,6 +1400,7 @@
             document.getElementById('customBanksList').innerHTML = generateCustomBankList();
             document.getElementById('bavSettingsGrid').innerHTML = generateDesignationSettings('bav-setting', isBav);
             document.getElementById('riesterSettingsGrid').innerHTML = generateDesignationSettings('riester-setting', isRiester);
+            document.getElementById('ltaSettingsGrid').innerHTML = generateDesignationSettings('lta-setting', isLta);
         }
         function showSettingsModal() {
             renderSettingsModalBody();
@@ -1357,8 +1410,10 @@
         function persistDesignationsFromForm() {
             const bavIds = [...document.querySelectorAll('#bavSettingsGrid .bav-setting:checked')].map(cb => cb.value);
             const riesterIds = [...document.querySelectorAll('#riesterSettingsGrid .riester-setting:checked')].map(cb => cb.value);
+            const ltaIds = [...document.querySelectorAll('#ltaSettingsGrid .lta-setting:checked')].map(cb => cb.value);
             Settings.setBavAccountIds(bavIds);
             Settings.setRiesterAccountIds(riesterIds);
+            Settings.setLtaAccountIds(ltaIds);
         }
         function saveSettings() {
             persistDesignationsFromForm();
@@ -1418,7 +1473,7 @@
                 bank.accounts.forEach((acc, i) => {
                     const cbId = `show${bank.cbPrefix}_${acc.suffix === 'lta' ? 'LTA' : acc.label}`;
                     const isLast = i === bank.accounts.length - 1 && bank.accounts.length <= 1;
-                    checkboxes += `<label class="chart-checkbox"${!isLast ? ' style="margin-bottom: 0.25rem;"' : ''}><input type="checkbox" id="${cbId}" onchange="updateChartDisplay()"><span>${acc.label}${bavIndicator(isBav(`${bank.prefix}_${acc.suffix}`))}${riesterIndicator(isRiester(`${bank.prefix}_${acc.suffix}`))}</span></label>`;
+                    checkboxes += `<label class="chart-checkbox"${!isLast ? ' style="margin-bottom: 0.25rem;"' : ''}><input type="checkbox" id="${cbId}" onchange="updateChartDisplay()"><span>${acc.label}${bavIndicator(isBav(`${bank.prefix}_${acc.suffix}`))}${riesterIndicator(isRiester(`${bank.prefix}_${acc.suffix}`))}${ltaIndicator(isLta(`${bank.prefix}_${acc.suffix}`))}</span></label>`;
                 });
                 return `<div style="border-left: 3px solid ${bank.color}; padding-left: 0.75rem;">
                     <div style="font-weight: 600; color: ${bank.color}; margin-bottom: 0.5rem; font-size: 0.9rem;">${bank.label}</div>
@@ -1431,7 +1486,7 @@
             return BANKS.map(bank => {
                 const inputs = bank.accounts.map((acc, i) => {
                     const isLast = i === bank.accounts.length - 1;
-                    return `<div class="input-group"${!isLast ? ' style="margin-bottom: 0.5rem;"' : ''}><label>${acc.label}${bavIndicator(isBav(`${bank.prefix}_${acc.suffix}`))}${riesterIndicator(isRiester(`${bank.prefix}_${acc.suffix}`))}</label><input type="number" step="0.01" id="${bank.prefix}_${acc.suffix}" placeholder="0.00"></div>`;
+                    return `<div class="input-group"${!isLast ? ' style="margin-bottom: 0.5rem;"' : ''}><label>${acc.label}${bavIndicator(isBav(`${bank.prefix}_${acc.suffix}`))}${riesterIndicator(isRiester(`${bank.prefix}_${acc.suffix}`))}${ltaIndicator(isLta(`${bank.prefix}_${acc.suffix}`))}</label><input type="number" step="0.01" id="${bank.prefix}_${acc.suffix}" placeholder="0.00"></div>`;
                 }).join('');
                 return `<div class="bank-column">
                     <div class="bank-header">${bank.label} <button class="copy-bank-btn" onclick="copyPreviousBank('${bank.prefix}')" title="Werte übernehmen">&#x25C0;</button></div>
@@ -1454,12 +1509,13 @@
             if (tabName === 'rentenluecke') {
                 loadRL2Data();
                 autoFillBetriebsrente();
+                updateLtaFieldsVisibility();
             }
         }
 
         // ── Rentenlücke – Daten speichern/laden ──────────────────
         const RL2_STORAGE_KEY = 'rentenluecke2_data';
-        const RL2_FIELDS = ['rl2_alter', 'rl2_rentenalter', 'rl2_verheiratet', 'rl2_kinder', 'rl2_gesetzliche_rente', 'rl2_rentensteigerung', 'rl2_betriebsrente', 'rl2_riester', 'rl2_riester_kapital', 'rl2_wunschrente', 'rl2_inflation', 'rl2_vermoegen', 'rl2_verzinsung', 'rl2_entnahmezeitraum'];
+        const RL2_FIELDS = ['rl2_alter', 'rl2_rentenalter', 'rl2_verheiratet', 'rl2_kinder', 'rl2_gesetzliche_rente', 'rl2_rentensteigerung', 'rl2_betriebsrente', 'rl2_riester', 'rl2_riester_kapital', 'rl2_lta_wert', 'rl2_lta_option', 'rl2_lta_dauer', 'rl2_wunschrente', 'rl2_inflation', 'rl2_vermoegen', 'rl2_verzinsung', 'rl2_entnahmezeitraum'];
 
         function saveRL2Data() {
             const data = {};
@@ -1484,14 +1540,36 @@
                 if (el) el.addEventListener('input', saveRL2Data);
             });
             loadRL2Data();
+            updateLtaFieldsVisibility();
         });
 
         function uebernahmeVermoegen2() {
             if (AppState.entries.length === 0) { alert('Keine Einträge vorhanden'); return; }
-            // bAV feeds the Betriebsrente and Riester feeds the Riester-Kapital,
-            // so exclude both here to avoid double counting.
-            const { total, bav, riester } = calculateTotals(AppState.entries[0]);
-            document.getElementById('rl2_vermoegen').value = (total - bav - riester).toFixed(2);
+            // bAV → Betriebsrente, Riester → Riester-Kapital, LTA → LTA-Guthaben,
+            // so exclude all three here to avoid double counting.
+            const { total, bav, riester, lta } = calculateTotals(AppState.entries[0]);
+            document.getElementById('rl2_vermoegen').value = (total - bav - riester - lta).toFixed(2);
+            saveRL2Data();
+        }
+
+        // Show the LTA payout-duration field only for the monthly-payout option.
+        function updateLtaFieldsVisibility() {
+            const opt = document.getElementById('rl2_lta_option').value;
+            document.getElementById('rl2_lta_dauer_group').style.visibility = (opt === 'monatlich') ? 'visible' : 'hidden';
+        }
+        function onLtaOptionChange() {
+            updateLtaFieldsVisibility();
+            saveRL2Data();
+        }
+        // Pull the LTA pot into the LTA-Guthaben field.
+        function uebernahmeLta2() {
+            if (AppState.entries.length === 0) { alert('Keine Einträge vorhanden'); return; }
+            const lta = calculateTotals(AppState.entries[0]).lta;
+            if (lta <= 0) {
+                alert('Kein LTA-Guthaben vorhanden. Markiere zuerst ein Konto/Depot in den Einstellungen als LTA.');
+                return;
+            }
+            document.getElementById('rl2_lta_wert').value = lta.toFixed(2);
             saveRL2Data();
         }
 
@@ -1643,6 +1721,9 @@
             const betriebsrenteBrutto = parseFloat(document.getElementById('rl2_betriebsrente').value) || 0;
             const riesterBrutto = parseFloat(document.getElementById('rl2_riester').value) || 0;
             const riesterKapital = parseFloat(document.getElementById('rl2_riester_kapital').value) || 0;
+            const ltaWert = parseFloat(document.getElementById('rl2_lta_wert').value) || 0;
+            const ltaOption = document.getElementById('rl2_lta_option').value;
+            const ltaDauer = parseInt(document.getElementById('rl2_lta_dauer').value) || 0;
             const wunschrenteNetto = parseFloat(document.getElementById('rl2_wunschrente').value);
             const inflation = parseFloat(document.getElementById('rl2_inflation').value);
             const vermoegen = parseFloat(document.getElementById('rl2_vermoegen').value) || 0;
@@ -1657,11 +1738,11 @@
             if (rentenalter <= alter) {
                 return null;
             }
-            return { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, riesterBrutto, riesterKapital, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder };
+            return { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, riesterBrutto, riesterKapital, ltaWert, ltaOption, ltaDauer, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder };
         }
 
         function calculateRL2(inputs) {
-            const { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, riesterBrutto, riesterKapital, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
+            const { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, riesterBrutto, riesterKapital, ltaWert, ltaOption, ltaDauer, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
             const aktuellesJahr = new Date().getFullYear();
             const jahresBisRente = rentenalter - alter;
             const renteneintrittsjahr = aktuellesJahr + jahresBisRente;
@@ -1670,13 +1751,23 @@
             const steigRate = rentensteigerung / 100;
             const gesetzlichBeiRente = gesetzlichBrutto;
             const bestAnteil = besteuerungsanteil(renteneintrittsjahr);
-            // Riester capital joins the available wealth pot and is drawn down alongside it.
-            const startVermoegen = vermoegen + riesterKapital;
+            // LTA (Lebensarbeitszeitkonto) usage:
+            //  - 'monatlich': spread over ltaDauer years as a Betriebsrenten-like
+            //    gross monthly payout (fully taxable + KV/PV) for those first years.
+            //  - 'einmal': gross lump sum added to the available capital pot.
+            //  - 'altersteilzeit': consumed before retirement → no effect here.
+            const ltaMonatlich = (ltaOption === 'monatlich' && ltaDauer > 0) ? ltaWert / (ltaDauer * 12) : 0;
+            const ltaKapital = (ltaOption === 'einmal') ? ltaWert : 0;
+            // LTA monthly is taxed/charged like the Betriebsrente, so fold it into
+            // that stream for the years it is paid out.
+            const betriebJ = j => betriebsrenteBrutto + ((ltaOption === 'monatlich' && j < ltaDauer) ? ltaMonatlich : 0);
+            // Riester + LTA lump sum join the available wealth pot and are drawn down with it.
+            const startVermoegen = vermoegen + riesterKapital + ltaKapital;
             const vermoegenBeiRente = startVermoegen * Math.pow(1 + verzRate, jahresBisRente);
             const wunschNettoBeiRente = wunschrenteNetto * Math.pow(1 + inflRate, jahresBisRente);
             const pvSatz = pvRentnerSatz(anzahlKinder);
 
-            const ohnEntnahme = berechneNetto(gesetzlichBeiRente, betriebsrenteBrutto, riesterBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
+            const ohnEntnahme = berechneNetto(gesetzlichBeiRente, betriebJ(0), riesterBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
             const rentenNettoOhneEntnahme = ohnEntnahme.nettoGesamt / 12;
             const benoetigteEntnahmeMonat1 = Math.max(0, wunschNettoBeiRente - rentenNettoOhneEntnahme);
 
@@ -1691,7 +1782,7 @@
                 labels.push(`${rentenalter + j} (${renteneintrittsjahr + j})`);
                 const gesetzlJ = gesetzlichBeiRente * Math.pow(1 + steigRate, j);
                 const wunschNettoJ = wunschNettoBeiRente * Math.pow(1 + inflRate, j);
-                const nettoOhne = berechneNetto(gesetzlJ, betriebsrenteBrutto, riesterBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
+                const nettoOhne = berechneNetto(gesetzlJ, betriebJ(j), riesterBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
                 const renteNettoJ = nettoOhne.nettoGesamt / 12;
                 const entnahmeJ = Math.max(0, wunschNettoJ - renteNettoJ);
                 vermoegenVerlauf.push(Math.round(aktVermoegen * 100) / 100);
@@ -1707,7 +1798,7 @@
             for (let j = 0; j < entnahmezeitraum; j++) {
                 const gesetzlJ = gesetzlichBeiRente * Math.pow(1 + steigRate, j);
                 const wunschNettoJ = wunschNettoBeiRente * Math.pow(1 + inflRate, j);
-                const nettoOhne = berechneNetto(gesetzlJ, betriebsrenteBrutto, riesterBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
+                const nettoOhne = berechneNetto(gesetzlJ, betriebJ(j), riesterBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
                 const entnahmeJ = Math.max(0, wunschNettoJ - nettoOhne.nettoGesamt / 12) * 12;
                 benoetigtesKapital += entnahmeJ / Math.pow(1 + verzRate, j);
             }
@@ -1720,12 +1811,18 @@
                 monatlicheSparrate = monatsZins > 0 ? vermoegenslücke * monatsZins / (Math.pow(1 + monatsZins, monate) - 1) : vermoegenslücke / monate;
             }
 
-            return { jahresBisRente, renteneintrittsjahr, bestAnteil, vermoegenBeiRente, wunschNettoBeiRente, gesetzlichBeiRente, rentenNettoOhneEntnahme, benoetigteEntnahmeMonat1, benoetigtesKapital, vermoegenslücke, monatlicheSparrate, ohnEntnahme, pvSatz, labels, vermoegenVerlauf, nettoBedarfVerlauf, nettoRenteVerlauf, entnahmeVerlauf };
+            return { jahresBisRente, renteneintrittsjahr, bestAnteil, vermoegenBeiRente, wunschNettoBeiRente, gesetzlichBeiRente, rentenNettoOhneEntnahme, benoetigteEntnahmeMonat1, benoetigtesKapital, vermoegenslücke, monatlicheSparrate, ohnEntnahme, pvSatz, ltaMonatlich, ltaKapital, labels, vermoegenVerlauf, nettoBedarfVerlauf, nettoRenteVerlauf, entnahmeVerlauf };
         }
 
         function renderRL2Results(results, inputs) {
-            const { jahresBisRente, renteneintrittsjahr, bestAnteil, vermoegenBeiRente, wunschNettoBeiRente, gesetzlichBeiRente, rentenNettoOhneEntnahme, benoetigteEntnahmeMonat1, benoetigtesKapital, vermoegenslücke, monatlicheSparrate, ohnEntnahme: r, pvSatz } = results;
-            const { betriebsrenteBrutto, riesterBrutto, riesterKapital, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
+            const { jahresBisRente, renteneintrittsjahr, bestAnteil, vermoegenBeiRente, wunschNettoBeiRente, gesetzlichBeiRente, rentenNettoOhneEntnahme, benoetigteEntnahmeMonat1, benoetigtesKapital, vermoegenslücke, monatlicheSparrate, ohnEntnahme: r, pvSatz, ltaMonatlich, ltaKapital } = results;
+            const { betriebsrenteBrutto, riesterBrutto, riesterKapital, ltaWert, ltaOption, ltaDauer, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
+            const LTA_OPTION_LABELS = { altersteilzeit: 'Altersteilzeit (vor Rente, informativ)', monatlich: 'Monatlich ab Rentenbeginn', einmal: 'Einmalbetrag bei Rentenbeginn' };
+            const ltaInfo = ltaWert > 0
+                ? (ltaOption === 'monatlich' ? `${formatCurrency(ltaWert)} → ${formatCurrency(ltaMonatlich)}/Mon. über ${ltaDauer} J.`
+                    : ltaOption === 'einmal' ? `${formatCurrency(ltaWert)} (Kapital in den Topf)`
+                    : `${formatCurrency(ltaWert)} (vor Rente verbraucht, nicht eingerechnet)`)
+                : '–';
             const container = document.getElementById('rl2Result');
             container.innerHTML = `
                 <div style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border);">
@@ -1750,6 +1847,9 @@
                         </div>
                         <div style="font-size: 0.85rem; color: var(--text-secondary);">
                             Riester-Kapital: <strong style="color: var(--text-primary);">${formatCurrency(riesterKapital)}</strong>
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                            LTA ⏳ (${LTA_OPTION_LABELS[ltaOption] || ltaOption}): <strong style="color: var(--text-primary);">${ltaInfo}</strong>
                         </div>
                         <div style="font-size: 0.85rem; color: var(--text-secondary);">
                             PV-Satz: <strong style="color: var(--text-primary);">${(pvSatz * 100).toFixed(1)} %</strong> (${anzahlKinder > 0 ? anzahlKinder + (anzahlKinder === 1 ? ' Kind' : ' Kinder') : 'kinderlos'})
@@ -1780,7 +1880,7 @@
                     <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 2rem;">
                             <div style="font-size: 0.95rem; color: var(--text-secondary);">
-                                Netto-Rente (gesetzl.+betriebl.+Riester):
+                                Netto-Rente (alle laufenden Renten):
                                 <strong style="color: var(--accent-emerald); font-size: 1.1rem;">${formatCurrency(rentenNettoOhneEntnahme)}/Mon.</strong>
                             </div>
                             <div style="font-size: 0.95rem; color: var(--text-secondary);">
@@ -1876,7 +1976,7 @@
                 yAxisID: 'y1'
             });
             if (showR) datasets.push({
-                label: 'Netto-Rente (gesetzl.+betriebl.+Riester)', data: nettoRenteVerlauf,
+                label: 'Netto-Rente (alle laufenden Renten)', data: nettoRenteVerlauf,
                 borderColor: '#a78bfa', borderWidth: 2, fill: false, tension: 0.3,
                 pointRadius: 3, pointBackgroundColor: '#a78bfa', pointBorderColor: '#0f1419', pointBorderWidth: 2,
                 yAxisID: 'y1'
