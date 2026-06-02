@@ -190,6 +190,11 @@
         .summary-value { font-size: 2rem; font-weight: 600; font-family: 'Playfair Display', serif; }
         .summary-value.positive { color: var(--accent-emerald); }
         .summary-value.negative { color: var(--accent-ruby); }
+        .summary-hero { margin-bottom: 1.5rem; text-align: center; animation: fadeInUp 0.8s ease-out 0.35s both; }
+        .summary-hero .summary-label { font-size: 1rem; }
+        .summary-hero .summary-value { font-size: 3.25rem; }
+        .summary-grid--split { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+        .summary-grid--changes { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
         .history-section {
             background: var(--bg-card); border-radius: 20px; padding: 2rem;
             border: 1px solid var(--border); box-shadow: 0 8px 32px rgba(0,0,0,0.3);
@@ -288,6 +293,8 @@
         .time-btn { padding: 0.35rem 0.85rem; background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 8px; font-family: 'Work Sans', sans-serif; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
         .time-btn:hover { border-color: var(--accent-gold); color: var(--text-primary); }
         .time-btn.active { background: var(--accent-gold); color: var(--bg-primary); border-color: var(--accent-gold); font-weight: 600; }
+        .time-date { padding: 0.3rem 0.55rem; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px; font-family: 'Work Sans', sans-serif; font-size: 0.85rem; }
+        .time-date:focus { outline: none; border-color: var(--accent-gold); }
         /* ── Tab Navigation ── */
         .tab-nav { display: flex; gap: 0; margin-bottom: 2rem; background: var(--bg-card); border-radius: 12px; padding: 0.25rem; border: 1px solid var(--border); animation: fadeIn 0.8s ease-out 0.15s both; }
         .tab-btn { flex: 1; padding: 0.75rem 1.5rem; border: none; border-radius: 10px; font-family: 'Work Sans', sans-serif; font-size: 0.95rem; font-weight: 500; cursor: pointer; transition: all 0.3s ease; background: transparent; color: var(--text-secondary); }
@@ -336,23 +343,35 @@
             </span>
         </div>
 
-        <div class="summary-grid">
+        <div class="summary-card summary-hero">
+            <div class="summary-label">Gesamtvermögen</div>
+            <div class="summary-value" id="totalValue">€ 0</div>
+        </div>
+
+        <div class="summary-grid summary-grid--split">
             <div class="summary-card">
-                <div class="summary-label">Gesamtvermögen</div>
-                <div class="summary-value" id="totalValue">€ 0</div>
-            </div>
-            <div class="summary-card">
-                <div class="summary-label">Gesamt Konten</div>
+                <div class="summary-label">Konten</div>
                 <div class="summary-value" id="totalAccounts">€ 0</div>
             </div>
             <div class="summary-card">
-                <div class="summary-label">Gesamt Depots</div>
+                <div class="summary-label">Depots</div>
                 <div class="summary-value" id="totalDepots">€ 0</div>
             </div>
             <div class="summary-card">
                 <div class="summary-label">Betriebliche Altersvorsorge 🏢</div>
                 <div class="summary-value" id="totalBav">€ 0</div>
             </div>
+            <div class="summary-card">
+                <div class="summary-label">Lebensarbeitszeitkonto ⏳</div>
+                <div class="summary-value" id="totalLta">€ 0</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Riester 🅁</div>
+                <div class="summary-value" id="totalRiester">€ 0</div>
+            </div>
+        </div>
+
+        <div class="summary-grid summary-grid--changes">
             <div class="summary-card">
                 <div class="summary-label">Letzte Veränderung</div>
                 <div class="summary-value" id="recentChangeValue">-</div>
@@ -398,11 +417,16 @@
             <canvas id="wealthChart"></canvas>
             <div class="time-filter">
                 <span class="time-filter-label">Zeitraum:</span>
+                <button class="time-btn active" data-range="ytd" onclick="setTimeRange('ytd')">YTD</button>
                 <button class="time-btn" data-range="3m" onclick="setTimeRange('3m')">3M</button>
                 <button class="time-btn" data-range="6m" onclick="setTimeRange('6m')">6M</button>
                 <button class="time-btn" data-range="1y" onclick="setTimeRange('1y')">1J</button>
                 <button class="time-btn" data-range="3y" onclick="setTimeRange('3y')">3J</button>
-                <button class="time-btn active" data-range="all" onclick="setTimeRange('all')">Alles</button>
+                <button class="time-btn" data-range="all" onclick="setTimeRange('all')">Alles</button>
+                <span class="time-filter-label" style="margin-left: 0.75rem;">Von:</span>
+                <input type="date" id="dateFrom" class="time-date" onchange="applyCustomRange()">
+                <span class="time-filter-label">Bis:</span>
+                <input type="date" id="dateTo" class="time-date" onchange="applyCustomRange()">
             </div>
         </div>
 
@@ -806,6 +830,7 @@
 
         // ── Time Range Config (OCP) ──────────────────────────────
         const TIME_RANGES = [
+            { key: 'ytd', label: 'YTD' },
             { key: '3m', label: '3M', months: 3 },
             { key: '6m', label: '6M', months: 6 },
             { key: '1y', label: '1J', years: 1 },
@@ -845,7 +870,9 @@
             currentUser: null,
             currentEditingEntryId: null,
             showBankDetails: false,
-            activeTimeRange: 'all',
+            activeTimeRange: 'ytd',
+            customFrom: null,
+            customTo: null,
             wealthChart: null,
             rl2Chart: null,
             rl2ChartData: null
@@ -902,6 +929,12 @@
 
         function setTimeRange(range) {
             AppState.activeTimeRange = range;
+            AppState.customFrom = null;
+            AppState.customTo = null;
+            const df = document.getElementById('dateFrom');
+            const dt = document.getElementById('dateTo');
+            if (df) df.value = '';
+            if (dt) dt.value = '';
             document.querySelectorAll('.time-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.range === range);
             });
@@ -910,9 +943,38 @@
             renderChart(filtered);
         }
 
+        // Custom date range from the Von/Bis pickers (overrides the preset buttons).
+        function applyCustomRange() {
+            const from = document.getElementById('dateFrom').value;
+            const to = document.getElementById('dateTo').value;
+            if (!from && !to) { setTimeRange('ytd'); return; }
+            AppState.activeTimeRange = 'custom';
+            AppState.customFrom = from || null;
+            AppState.customTo = to || null;
+            document.querySelectorAll('.time-btn').forEach(btn => btn.classList.remove('active'));
+            const filtered = getFilteredEntries();
+            displayHistory(filtered);
+            renderChart(filtered);
+        }
+
         function getFilteredEntries() {
-            if (AppState.activeTimeRange === 'all') return AppState.entries;
-            const config = TIME_RANGES.find(r => r.key === AppState.activeTimeRange);
+            const range = AppState.activeTimeRange;
+            if (range === 'custom') {
+                const from = AppState.customFrom ? new Date(AppState.customFrom) : null;
+                const to = AppState.customTo ? new Date(AppState.customTo) : null;
+                return AppState.entries.filter(e => {
+                    const d = new Date(e.date);
+                    if (from && d < from) return false;
+                    if (to && d > to) return false;
+                    return true;
+                });
+            }
+            if (range === 'all') return AppState.entries;
+            if (range === 'ytd') {
+                const cutoff = new Date(new Date().getFullYear(), 0, 1);
+                return AppState.entries.filter(e => new Date(e.date) >= cutoff);
+            }
+            const config = TIME_RANGES.find(r => r.key === range);
             if (!config) return AppState.entries;
             const cutoff = new Date();
             if (config.months) cutoff.setMonth(cutoff.getMonth() - config.months);
@@ -1005,15 +1067,17 @@
 
         function updateSummary(list) {
             if (list.length === 0) {
-                ['totalValue','totalAccounts','totalDepots','totalBav'].forEach(id => { document.getElementById(id).textContent = '€ 0'; });
+                ['totalValue','totalAccounts','totalDepots','totalBav','totalLta','totalRiester'].forEach(id => { document.getElementById(id).textContent = '€ 0'; });
                 ['recentChangeValue','totalChangeValue'].forEach(id => { document.getElementById(id).textContent = '-'; });
                 return;
             }
-            const { total, konten, depots, bav } = calculateTotals(list[0]);
+            const { total, konten, depots, bav, lta, riester } = calculateTotals(list[0]);
             document.getElementById('totalValue').textContent    = Formatter.currency(total);
             document.getElementById('totalAccounts').textContent = Formatter.currency(konten);
             document.getElementById('totalDepots').textContent   = Formatter.currency(depots);
             document.getElementById('totalBav').textContent      = Formatter.currency(bav);
+            document.getElementById('totalLta').textContent      = Formatter.currency(lta);
+            document.getElementById('totalRiester').textContent  = Formatter.currency(riester);
 
             if (list.length > 1) {
                 const prevTotal = calculateTotals(list[1]).total;
