@@ -130,6 +130,20 @@
             font-size: 0.8em; line-height: 1; cursor: help; vertical-align: middle;
             margin-left: 0.3rem; filter: grayscale(0.1);
         }
+        .rl-group-title {
+            font-family: 'Playfair Display', serif; font-size: 1.2rem; font-weight: 600;
+            color: var(--accent-gold); margin: 1.75rem 0 0.25rem; padding-bottom: 0.4rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .rl-group-title:first-of-type { margin-top: 1rem; }
+        .info-icon {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 1.15em; height: 1.15em; border-radius: 50%;
+            border: 1px solid var(--text-secondary); color: var(--text-secondary);
+            font-size: 0.72em; font-style: normal; font-weight: 700;
+            cursor: help; margin-left: 0.35rem; vertical-align: middle;
+        }
+        .info-icon:hover { border-color: var(--accent-gold); color: var(--accent-gold); }
         .section-title {
             font-family: 'Playfair Display', serif; font-size: 1.75rem; font-weight: 600;
             margin-bottom: 1rem; display: flex; align-items: center; gap: 0.75rem;
@@ -450,6 +464,8 @@
             <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem; margin-bottom: 1rem;">
                 Berechnet automatisch den Besteuerungsanteil nach Renteneintritts­jahr, die Einkommensteuer (Grundtarif 2025) sowie KV- und PV-Beiträge für Rentner.
             </p>
+            <!-- Gruppe 1: Personeneingaben -->
+            <h3 class="rl-group-title">Personeneingaben</h3>
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
                 <div class="input-group">
                     <label>Aktuelles Alter</label>
@@ -471,7 +487,7 @@
                     <input type="number" id="rl2_kinder" placeholder="0" min="0" max="20" value="0">
                 </div>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
                 <div class="input-group">
                     <label>Gesetzl. Rente brutto bei Eintritt (monatl.)</label>
                     <input type="number" step="0.01" id="rl2_gesetzliche_rente" placeholder="1200.00">
@@ -481,15 +497,6 @@
                     <input type="number" step="0.1" id="rl2_rentensteigerung" placeholder="1.5">
                 </div>
                 <div class="input-group">
-                    <label>Betriebsrente brutto (monatl.) 🏢</label>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <input type="number" step="0.01" id="rl2_betriebsrente" placeholder="0.00" style="flex: 1;">
-                        <button class="btn btn-secondary" onclick="uebernahmeBetriebsrente2()" title="bAV-Vermögen als monatliche Betriebsrente übernehmen (verteilt über den Entnahmezeitraum)" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
-                    </div>
-                </div>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
-                <div class="input-group">
                     <label>Gewünschte Netto-Monatsrente (heutiger Wert)</label>
                     <input type="number" step="0.01" id="rl2_wunschrente" placeholder="2500.00">
                 </div>
@@ -498,6 +505,25 @@
                     <input type="number" step="0.1" id="rl2_inflation" placeholder="2.5">
                 </div>
             </div>
+
+            <!-- Gruppe 2: bAV & Riester-Vermögen -->
+            <h3 class="rl-group-title">bAV &amp; Riester-Vermögen</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                <div class="input-group">
+                    <label>Betriebsrente brutto (monatl.) 🏢<span class="info-icon" title="Berechnung der monatlichen Betriebsrente:&#10;bAV-Vermögen ÷ (Entnahmezeitraum × 12).&#10;Das angesparte bAV-Kapital wird gleichmäßig und ohne Verzinsung über den Entnahmezeitraum verteilt.&#10;Beispiel: 60.000 € ÷ (25 × 12) = 200 €/Monat.&#10;Betriebsrenten sind voll steuerpflichtig und unterliegen KV- und PV-Beiträgen.">i</span></label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="number" step="0.01" id="rl2_betriebsrente" placeholder="0.00" style="flex: 1;">
+                        <button class="btn btn-secondary" onclick="uebernahmeBetriebsrente2()" title="bAV-Vermögen als monatliche Betriebsrente übernehmen (verteilt über den Entnahmezeitraum)" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Riester-Rente brutto (monatl.)<span class="info-icon" title="Riester-Rente als zusätzliche monatliche Renteneinkunft.&#10;Wird in der Auszahlphase voll versteuert, ist aber für pflichtversicherte Rentner KV-/PV-beitragsfrei.">i</span></label>
+                    <input type="number" step="0.01" id="rl2_riester" placeholder="0.00">
+                </div>
+            </div>
+
+            <!-- Gruppe 3: Konten- & Depotvermögen -->
+            <h3 class="rl-group-title">Konten- &amp; Depotvermögen</h3>
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
                 <div class="input-group">
                     <label>Bestehendes Vermögen (ohne bAV)</label>
@@ -524,7 +550,7 @@
             <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
                 <label class="chart-checkbox"><input type="checkbox" id="rl2ShowVermoegen" checked onchange="updateRL2Chart()"><span>Vermögen</span></label>
                 <label class="chart-checkbox"><input type="checkbox" id="rl2ShowNettoBedarf" checked onchange="updateRL2Chart()"><span>Netto-Bedarf (inflationsber.)</span></label>
-                <label class="chart-checkbox"><input type="checkbox" id="rl2ShowNettoRente" checked onchange="updateRL2Chart()"><span>Netto-Rente (gesetzl.+betriebl.)</span></label>
+                <label class="chart-checkbox"><input type="checkbox" id="rl2ShowNettoRente" checked onchange="updateRL2Chart()"><span>Netto-Rente (gesetzl.+betriebl.+Riester)</span></label>
                 <label class="chart-checkbox"><input type="checkbox" id="rl2ShowEntnahme" checked onchange="updateRL2Chart()"><span>Entnahme/Monat</span></label>
             </div>
             <canvas id="rl2Chart"></canvas>
@@ -1268,7 +1294,7 @@
 
         // ── Rentenlücke – Daten speichern/laden ──────────────────
         const RL2_STORAGE_KEY = 'rentenluecke2_data';
-        const RL2_FIELDS = ['rl2_alter', 'rl2_rentenalter', 'rl2_verheiratet', 'rl2_kinder', 'rl2_gesetzliche_rente', 'rl2_rentensteigerung', 'rl2_betriebsrente', 'rl2_wunschrente', 'rl2_inflation', 'rl2_vermoegen', 'rl2_verzinsung', 'rl2_entnahmezeitraum'];
+        const RL2_FIELDS = ['rl2_alter', 'rl2_rentenalter', 'rl2_verheiratet', 'rl2_kinder', 'rl2_gesetzliche_rente', 'rl2_rentensteigerung', 'rl2_betriebsrente', 'rl2_riester', 'rl2_wunschrente', 'rl2_inflation', 'rl2_vermoegen', 'rl2_verzinsung', 'rl2_entnahmezeitraum'];
 
         function saveRL2Data() {
             const data = {};
@@ -1406,9 +1432,12 @@
         // ── Rentenlücke Berechnung ────────────────────────────────
 
         // Standalone netto calculation (ISP: explicit params, no closure dependency)
-        function berechneNetto(gesetzlBruttoMonat, betriebsBruttoMonat, entnahmeMonat, bestAnteilFix, istVerheiratet, pvSatz) {
+        function berechneNetto(gesetzlBruttoMonat, betriebsBruttoMonat, riesterBruttoMonat, entnahmeMonat, bestAnteilFix, istVerheiratet, pvSatz) {
             const gesetzlJahr = gesetzlBruttoMonat * 12;
             const betriebsJahr = betriebsBruttoMonat * 12;
+            // Riester-Renten sind in der Auszahlphase voll steuerpflichtig, für
+            // pflichtversicherte Rentner aber KV-/PV-beitragsfrei.
+            const riesterJahr = riesterBruttoMonat * 12;
             const kvGesetzl = gesetzlJahr * KV_RENTNER_SATZ;
             const pvGesetzl = gesetzlJahr * pvSatz;
             const betriebsFreigrenze = BETRIEBSRENTE_FREIGRENZE_MONAT * 12;
@@ -1417,14 +1446,15 @@
             const sozialAbgaben = kvGesetzl + pvGesetzl + kvBetrieb + pvBetrieb;
             const steuerpflGesetzl = gesetzlJahr * bestAnteilFix;
             const steuerpflBetrieb = betriebsJahr;
+            const steuerpflRiester = riesterJahr;
             const werbungskosten = 102;
-            const zvE = Math.max(0, steuerpflGesetzl + steuerpflBetrieb - werbungskosten);
+            const zvE = Math.max(0, steuerpflGesetzl + steuerpflBetrieb + steuerpflRiester - werbungskosten);
             const est = einkommensteuer(zvE, istVerheiratet);
             const soli = solidaritaetszuschlag(est);
             const steuer = est + soli;
-            const bruttoGesamt = gesetzlJahr + betriebsJahr + entnahmeMonat * 12;
+            const bruttoGesamt = gesetzlJahr + betriebsJahr + riesterJahr + entnahmeMonat * 12;
             const nettoGesamt = bruttoGesamt - sozialAbgaben - steuer;
-            return { nettoGesamt, sozialAbgaben, steuer, zvE, est, soli, kvGesetzl, pvGesetzl, kvBetrieb, pvBetrieb, bestAnteilFix, steuerpflGesetzl, steuerpflBetrieb, pvSatz };
+            return { nettoGesamt, sozialAbgaben, steuer, zvE, est, soli, kvGesetzl, pvGesetzl, kvBetrieb, pvBetrieb, riesterJahr, bestAnteilFix, steuerpflGesetzl, steuerpflBetrieb, steuerpflRiester, pvSatz };
         }
 
         function readRL2Inputs() {
@@ -1433,6 +1463,7 @@
             const gesetzlichBrutto = parseFloat(document.getElementById('rl2_gesetzliche_rente').value);
             const rentensteigerung = parseFloat(document.getElementById('rl2_rentensteigerung').value);
             const betriebsrenteBrutto = parseFloat(document.getElementById('rl2_betriebsrente').value) || 0;
+            const riesterBrutto = parseFloat(document.getElementById('rl2_riester').value) || 0;
             const wunschrenteNetto = parseFloat(document.getElementById('rl2_wunschrente').value);
             const inflation = parseFloat(document.getElementById('rl2_inflation').value);
             const vermoegen = parseFloat(document.getElementById('rl2_vermoegen').value) || 0;
@@ -1447,11 +1478,11 @@
             if (rentenalter <= alter) {
                 return null;
             }
-            return { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder };
+            return { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, riesterBrutto, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder };
         }
 
         function calculateRL2(inputs) {
-            const { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
+            const { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, riesterBrutto, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
             const aktuellesJahr = new Date().getFullYear();
             const jahresBisRente = rentenalter - alter;
             const renteneintrittsjahr = aktuellesJahr + jahresBisRente;
@@ -1464,7 +1495,7 @@
             const wunschNettoBeiRente = wunschrenteNetto * Math.pow(1 + inflRate, jahresBisRente);
             const pvSatz = pvRentnerSatz(anzahlKinder);
 
-            const ohnEntnahme = berechneNetto(gesetzlichBeiRente, betriebsrenteBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
+            const ohnEntnahme = berechneNetto(gesetzlichBeiRente, betriebsrenteBrutto, riesterBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
             const rentenNettoOhneEntnahme = ohnEntnahme.nettoGesamt / 12;
             const benoetigteEntnahmeMonat1 = Math.max(0, wunschNettoBeiRente - rentenNettoOhneEntnahme);
 
@@ -1479,7 +1510,7 @@
                 labels.push(`${rentenalter + j} (${renteneintrittsjahr + j})`);
                 const gesetzlJ = gesetzlichBeiRente * Math.pow(1 + steigRate, j);
                 const wunschNettoJ = wunschNettoBeiRente * Math.pow(1 + inflRate, j);
-                const nettoOhne = berechneNetto(gesetzlJ, betriebsrenteBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
+                const nettoOhne = berechneNetto(gesetzlJ, betriebsrenteBrutto, riesterBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
                 const renteNettoJ = nettoOhne.nettoGesamt / 12;
                 const entnahmeJ = Math.max(0, wunschNettoJ - renteNettoJ);
                 vermoegenVerlauf.push(Math.round(aktVermoegen * 100) / 100);
@@ -1495,7 +1526,7 @@
             for (let j = 0; j < entnahmezeitraum; j++) {
                 const gesetzlJ = gesetzlichBeiRente * Math.pow(1 + steigRate, j);
                 const wunschNettoJ = wunschNettoBeiRente * Math.pow(1 + inflRate, j);
-                const nettoOhne = berechneNetto(gesetzlJ, betriebsrenteBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
+                const nettoOhne = berechneNetto(gesetzlJ, betriebsrenteBrutto, riesterBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
                 const entnahmeJ = Math.max(0, wunschNettoJ - nettoOhne.nettoGesamt / 12) * 12;
                 benoetigtesKapital += entnahmeJ / Math.pow(1 + verzRate, j);
             }
@@ -1513,7 +1544,7 @@
 
         function renderRL2Results(results, inputs) {
             const { jahresBisRente, renteneintrittsjahr, bestAnteil, vermoegenBeiRente, wunschNettoBeiRente, gesetzlichBeiRente, rentenNettoOhneEntnahme, benoetigteEntnahmeMonat1, benoetigtesKapital, vermoegenslücke, monatlicheSparrate, ohnEntnahme: r, pvSatz } = results;
-            const { betriebsrenteBrutto, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
+            const { betriebsrenteBrutto, riesterBrutto, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
             const container = document.getElementById('rl2Result');
             container.innerHTML = `
                 <div style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border);">
@@ -1532,6 +1563,9 @@
                         </div>
                         <div style="font-size: 0.85rem; color: var(--text-secondary);">
                             Betriebsrente brutto: <strong style="color: var(--text-primary);">${formatCurrency(betriebsrenteBrutto)}</strong>
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                            Riester-Rente brutto: <strong style="color: var(--text-primary);">${formatCurrency(riesterBrutto)}</strong>
                         </div>
                         <div style="font-size: 0.85rem; color: var(--text-secondary);">
                             PV-Satz: <strong style="color: var(--text-primary);">${(pvSatz * 100).toFixed(1)} %</strong> (${anzahlKinder > 0 ? anzahlKinder + (anzahlKinder === 1 ? ' Kind' : ' Kinder') : 'kinderlos'})
@@ -1562,7 +1596,7 @@
                     <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 2rem;">
                             <div style="font-size: 0.95rem; color: var(--text-secondary);">
-                                Netto-Rente (gesetzl.+betriebl.):
+                                Netto-Rente (gesetzl.+betriebl.+Riester):
                                 <strong style="color: var(--accent-emerald); font-size: 1.1rem;">${formatCurrency(rentenNettoOhneEntnahme)}/Mon.</strong>
                             </div>
                             <div style="font-size: 0.95rem; color: var(--text-secondary);">
@@ -1658,7 +1692,7 @@
                 yAxisID: 'y1'
             });
             if (showR) datasets.push({
-                label: 'Netto-Rente (gesetzl.+betriebl.)', data: nettoRenteVerlauf,
+                label: 'Netto-Rente (gesetzl.+betriebl.+Riester)', data: nettoRenteVerlauf,
                 borderColor: '#a78bfa', borderWidth: 2, fill: false, tension: 0.3,
                 pointRadius: 3, pointBackgroundColor: '#a78bfa', pointBorderColor: '#0f1419', pointBorderWidth: 2,
                 yAxisID: 'y1'
