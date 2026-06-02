@@ -151,6 +151,16 @@
         #tab-rentenluecke .input-group > input,
         #tab-rentenluecke .input-group > select,
         #tab-rentenluecke .input-group > div { margin-top: auto; }
+        /* Global settings gear — fixed top-right, available on every screen. */
+        .settings-fab {
+            position: fixed; top: 1.25rem; right: 1.25rem; z-index: 100;
+            width: 46px; height: 46px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--bg-card); border: 1px solid var(--border);
+            color: var(--text-secondary); font-size: 1.35rem; line-height: 1;
+            cursor: pointer; transition: color 0.3s ease, border-color 0.3s ease, transform 0.4s ease;
+        }
+        .settings-fab:hover { color: var(--accent-gold); border-color: var(--accent-gold); transform: rotate(60deg); }
         .section-title {
             font-family: 'Playfair Display', serif; font-size: 1.75rem; font-weight: 600;
             margin-bottom: 1rem; display: flex; align-items: center; gap: 0.75rem;
@@ -299,6 +309,7 @@
     </div>
 
     <div id="appContent" style="display:none;">
+    <button class="settings-fab" onclick="showSettingsModal()" title="Einstellungen" aria-label="Einstellungen">⚙</button>
     <div class="container">
         <header>
             <h1>Finanz-Tracker</h1>
@@ -316,7 +327,6 @@
             <button class="btn btn-primary" onclick="showAddEntryModal()">+ Neuer Eintrag</button>
             <button class="btn btn-secondary" onclick="showCompareModal()">Vergleichen</button>
             <button class="btn btn-secondary" onclick="exportData()">Export CSV</button>
-            <button class="btn btn-secondary" onclick="showSettingsModal()" title="Einstellungen">⚙ Einstellungen</button>
         </div>
 
         <div style="text-align: center; font-size: 0.9rem; margin-bottom: 1rem;">
@@ -451,7 +461,21 @@
         <div class="modal-content">
             <h2 class="section-title">⚙ Einstellungen</h2>
             <div class="input-section" style="margin: 0; box-shadow: none; border: none; background: transparent;">
-                <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">Betriebliche Altersvorsorge (bAV) 🏢</h3>
+                <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">Eigene Banken</h3>
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+                    Füge eigene Banken/Broker hinzu – jeweils mit Konto und/oder Depot. Sie erscheinen anschließend in Einträgen, Diagramm und den Markierungen unten.
+                </p>
+                <div id="customBanksList" style="margin-bottom: 1rem;"></div>
+                <div style="display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap;">
+                    <div class="input-group" style="flex: 1; min-width: 180px;">
+                        <label>Name der Bank</label>
+                        <input type="text" id="newBankName" placeholder="z. B. Scalable Capital" onkeydown="if(event.key==='Enter')addCustomBank()">
+                    </div>
+                    <label class="chart-checkbox" style="white-space: nowrap;"><input type="checkbox" id="newBankKonto" checked><span>Konto</span></label>
+                    <label class="chart-checkbox" style="white-space: nowrap;"><input type="checkbox" id="newBankDepot" checked><span>Depot</span></label>
+                    <button class="btn btn-secondary" onclick="addCustomBank()" style="white-space: nowrap;">+ Hinzufügen</button>
+                </div>
+                <h3 style="font-size: 1rem; margin: 2rem 0 0.5rem;">Betriebliche Altersvorsorge (bAV) 🏢</h3>
                 <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
                     Wähle die Konten/Depots, die als betriebliche Altersvorsorge zählen. bAV wird separat ausgewiesen und fließt als Betriebsrente in die Rentenlücke ein.
                 </p>
@@ -597,7 +621,9 @@
         const auth = firebase.auth();
 
         // ── Bank Registry (OCP: add a bank here, everything else follows) ──
-        const BANKS = [
+        // Built-in bank/broker registry. User-defined banks are merged on top
+        // of these (see Settings.getCustomBanks + buildBanks).
+        const DEFAULT_BANKS = [
             { prefix: 'mlp',     label: 'MLP',              cbPrefix: 'MLP',     color: '#8b5cf6', accounts: [{ suffix: 'konto', label: 'Konto' }, { suffix: 'depot', label: 'Depot' }] },
             { prefix: 'consors', label: 'Consors',           cbPrefix: 'Consors', color: '#3b82f6', accounts: [{ suffix: 'konto', label: 'Konto' }, { suffix: 'depot', label: 'Depot' }] },
             { prefix: 'tr',      label: 'Trade Republic',    cbPrefix: 'TR',      color: '#10b981', accounts: [{ suffix: 'konto', label: 'Konto' }, { suffix: 'depot', label: 'Depot' }] },
@@ -608,20 +634,15 @@
             { prefix: 'allianz', label: 'Allianz Riester',   cbPrefix: 'Allianz', color: '#e11d48', accounts: [{ suffix: 'konto', label: 'Konto' }] }
         ];
 
-        // Derived flat accounts list (from registry)
-        const accounts = BANKS.flatMap(bank =>
-            bank.accounts.map(acc => ({
-                id: `${bank.prefix}_${acc.suffix}`,
-                label: `${bank.label} ${acc.label}`,
-                type: acc.suffix === 'lta' ? 'lta' : acc.suffix,
-                bankPrefix: bank.prefix,
-                defaultBav: acc.bav === true   // registry default; effective state lives in Settings
-            }))
-        );
+        // ── Storage (localStorage wrapper) ───────────────────────
+        // Declared here because the registry below reads custom banks at load time.
+        const Storage = {
+            get(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } },
+            set(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
+        };
 
         // ── Settings (DIP: user-configurable, persisted in localStorage) ──
-        // Which accounts count as company pension (bAV). Falls back to the
-        // registry defaults until the user changes them in the settings dialog.
+        // Holds the bAV/Riester designations and the user-defined bank list.
         const SETTINGS_KEY = 'app_settings';
         const Settings = {
             _data: null,
@@ -647,12 +668,61 @@
             setRiesterAccountIds(ids) {
                 this._data = { ...this._load(), riesterAccounts: [...ids] };
                 Storage.set(SETTINGS_KEY, this._data);
+            },
+            // User-defined banks. Each: { prefix, label, cbPrefix, color, accounts:[{suffix,label}] }.
+            getCustomBanks() {
+                const stored = this._load().customBanks;
+                return Array.isArray(stored) ? stored : [];
+            },
+            setCustomBanks(banks) {
+                this._data = { ...this._load(), customBanks: [...banks] };
+                Storage.set(SETTINGS_KEY, this._data);
             }
         };
+
+        // Effective registry = built-ins + user-defined banks. BANKS/accounts are
+        // mutable and rebuilt (rebuildRegistry) whenever the custom-bank list changes.
+        function buildBanks() { return [...DEFAULT_BANKS, ...Settings.getCustomBanks()]; }
+        function buildAccounts() {
+            return BANKS.flatMap(bank =>
+                bank.accounts.map(acc => ({
+                    id: `${bank.prefix}_${acc.suffix}`,
+                    label: `${bank.label} ${acc.label}`,
+                    type: acc.suffix === 'lta' ? 'lta' : acc.suffix,
+                    bankPrefix: bank.prefix,
+                    defaultBav: acc.bav === true   // registry default; effective state lives in Settings
+                }))
+            );
+        }
+        let BANKS = buildBanks();
+        let accounts = buildAccounts();
+        function rebuildRegistry() { BANKS = buildBanks(); accounts = buildAccounts(); }
+
         // Effective bAV flag for an account id (consults Settings).
         function isBav(accountId) { return Settings.getBavAccountIds().includes(accountId); }
         // Effective Riester flag for an account id (consults Settings).
         function isRiester(accountId) { return Settings.getRiesterAccountIds().includes(accountId); }
+
+        // ── Custom-bank helpers ───────────────────────────────────────
+        const BANK_COLOR_PALETTE = ['#0ea5e9', '#a855f7', '#f97316', '#22c55e', '#eab308', '#ef4444', '#06b6d4', '#d946ef', '#84cc16', '#f43f5e'];
+        function slugifyBank(name) {
+            return name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '').slice(0, 20);
+        }
+        function uniqueBankPrefix(name) {
+            const existing = new Set(BANKS.map(b => b.prefix));
+            const base = slugifyBank(name) || 'bank';
+            let p = base, i = 2;
+            while (existing.has(p)) { p = base + i; i++; }
+            return p;
+        }
+        function pickBankColor() {
+            const used = new Set(BANKS.map(b => b.color));
+            const free = BANK_COLOR_PALETTE.find(c => !used.has(c));
+            return free || `hsl(${Math.floor(Math.random() * 360)}, 65%, 55%)`;
+        }
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
 
         // Annuitize a bAV lump sum into a flat monthly amount (no growth):
         // the pot is spread evenly across the payout period (Entnahmezeitraum).
@@ -696,11 +766,6 @@
         function formatDate(dateStr) { return Formatter.date(dateStr); }
 
         // ── Storage (DIP: wraps localStorage) ────────────────────
-        const Storage = {
-            get(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } },
-            set(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
-        };
-
         // ── DataStore (DIP: wraps Firebase) ──────────────────────
         const DataStore = {
             collection: null,
@@ -1264,20 +1329,76 @@
                 </div>`;
             }).join('');
         }
-        function showSettingsModal() {
+        // Renders the list of user-defined banks with a remove button each.
+        function generateCustomBankList() {
+            const custom = Settings.getCustomBanks();
+            if (custom.length === 0) {
+                return '<p style="color: var(--text-secondary); font-size: 0.85rem; font-style: italic; margin: 0;">Noch keine eigenen Banken hinzugefügt.</p>';
+            }
+            return custom.map(b => {
+                const types = b.accounts.map(a => a.label).join(' + ');
+                return `<div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.5rem 0.75rem; border-left: 3px solid ${b.color}; margin-bottom: 0.5rem; background: var(--bg-secondary); border-radius: 0 8px 8px 0;">
+                    <span style="color: var(--text-primary); font-size: 0.9rem;"><strong>${escapeHtml(b.label)}</strong> <span style="color: var(--text-secondary);">(${types})</span></span>
+                    <button class="btn btn-secondary" onclick="removeCustomBank('${b.prefix}')" style="padding: 0.3rem 0.7rem; font-size: 0.75rem; white-space: nowrap;">Entfernen</button>
+                </div>`;
+            }).join('');
+        }
+        // Re-render the dynamic parts of the settings modal (after add/remove).
+        function renderSettingsModalBody() {
+            document.getElementById('customBanksList').innerHTML = generateCustomBankList();
             document.getElementById('bavSettingsGrid').innerHTML = generateDesignationSettings('bav-setting', isBav);
             document.getElementById('riesterSettingsGrid').innerHTML = generateDesignationSettings('riester-setting', isRiester);
+        }
+        function showSettingsModal() {
+            renderSettingsModalBody();
             document.getElementById('settingsModal').classList.add('active');
         }
-        function saveSettings() {
+        // Persist the bAV/Riester ticks currently shown in the modal.
+        function persistDesignationsFromForm() {
             const bavIds = [...document.querySelectorAll('#bavSettingsGrid .bav-setting:checked')].map(cb => cb.value);
             const riesterIds = [...document.querySelectorAll('#riesterSettingsGrid .riester-setting:checked')].map(cb => cb.value);
             Settings.setBavAccountIds(bavIds);
             Settings.setRiesterAccountIds(riesterIds);
+        }
+        function saveSettings() {
+            persistDesignationsFromForm();
             applyBavSettings();
             closeModal('settingsModal');
         }
-        // Re-render everything that depends on the bAV/Riester designation.
+        function addCustomBank() {
+            const nameEl = document.getElementById('newBankName');
+            const name = nameEl.value.trim();
+            const wantKonto = document.getElementById('newBankKonto').checked;
+            const wantDepot = document.getElementById('newBankDepot').checked;
+            if (!name) { alert('Bitte einen Namen für die Bank eingeben.'); return; }
+            if (!wantKonto && !wantDepot) { alert('Bitte mindestens Konto oder Depot auswählen.'); return; }
+            if (BANKS.some(b => b.label.toLowerCase() === name.toLowerCase())) {
+                alert('Eine Bank mit diesem Namen existiert bereits.'); return;
+            }
+            const prefix = uniqueBankPrefix(name);
+            const accs = [];
+            if (wantKonto) accs.push({ suffix: 'konto', label: 'Konto' });
+            if (wantDepot) accs.push({ suffix: 'depot', label: 'Depot' });
+            const bank = { prefix, label: name, cbPrefix: prefix, color: pickBankColor(), accounts: accs };
+            persistDesignationsFromForm();   // don't lose pending bAV/Riester ticks on re-render
+            Settings.setCustomBanks([...Settings.getCustomBanks(), bank]);
+            rebuildRegistry();
+            nameEl.value = '';
+            document.getElementById('newBankKonto').checked = true;
+            document.getElementById('newBankDepot').checked = true;
+            renderSettingsModalBody();
+            applyBavSettings();
+        }
+        function removeCustomBank(prefix) {
+            if (!confirm('Diese Bank entfernen? Bereits gespeicherte Werte bleiben in der Datenbank erhalten, werden aber nicht mehr angezeigt.')) return;
+            persistDesignationsFromForm();
+            Settings.setCustomBanks(Settings.getCustomBanks().filter(b => b.prefix !== prefix));
+            rebuildRegistry();
+            renderSettingsModalBody();
+            applyBavSettings();
+        }
+        // Re-render everything that depends on the bank registry or the
+        // bAV/Riester designation (inputs, chart checkboxes, table, chart).
         function applyBavSettings() {
             initDynamicHTML();
             loadChartPreferences();
