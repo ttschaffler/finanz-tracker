@@ -555,17 +555,20 @@
 
             <!-- Gruppe 2: bAV & Riester-Vermögen -->
             <h3 class="rl-group-title">bAV &amp; Riester-Vermögen</h3>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
                 <div class="input-group">
-                    <label>Betriebsrente brutto (monatl.) 🏢<span class="info-icon" title="Berechnung der monatlichen Betriebsrente:&#10;bAV-Vermögen ÷ (Entnahmezeitraum × 12).&#10;Es zählt ausschließlich das in den Einstellungen als bAV markierte Vermögen.&#10;Das Kapital wird gleichmäßig und ohne Verzinsung über den Entnahmezeitraum verteilt.&#10;Beispiel: 60.000 € ÷ (25 × 12) = 200 €/Monat.&#10;Betriebsrenten sind voll steuerpflichtig und unterliegen KV- und PV-Beiträgen.">i</span></label>
+                    <label>bAV-Gesamtkapital 🏢<span class="info-icon" title="Angespartes Gesamtkapital der betrieblichen Altersvorsorge.&#10;'Übernehmen' zieht die Summe der in den Einstellungen als bAV markierten Konten/Depots heran.&#10;Aus diesem Kapital wird die monatliche Betriebsrente berechnet (Kapital ÷ Entnahmezeitraum ÷ 12).">i</span></label>
                     <div style="display: flex; gap: 0.5rem;">
-                        <input type="number" step="0.01" id="rl2_betriebsrente" placeholder="0.00" style="flex: 1;">
-                        <button class="btn btn-secondary" onclick="uebernahmeBetriebsrente2()" title="bAV-Vermögen als monatliche Betriebsrente übernehmen (verteilt über den Entnahmezeitraum)" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
+                        <input type="number" step="0.01" id="rl2_bav_kapital" placeholder="0.00" style="flex: 1;">
+                        <button class="btn btn-secondary" onclick="uebernahmeBavKapital2()" title="bAV-Gesamtkapital aus den als bAV markierten Konten übernehmen" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
                     </div>
                 </div>
                 <div class="input-group">
-                    <label>Riester-Rente brutto (monatl.) 🅁<span class="info-icon" title="Riester-Rente als zusätzliche monatliche Renteneinkunft.&#10;Wird in der Auszahlphase voll versteuert, ist aber für pflichtversicherte Rentner KV-/PV-beitragsfrei.">i</span></label>
-                    <input type="number" step="0.01" id="rl2_riester" placeholder="0.00">
+                    <label>Betriebsrente brutto (monatl.) 🏢<span class="info-icon" title="Berechnung der monatlichen Betriebsrente:&#10;bAV-Gesamtkapital ÷ (Entnahmezeitraum × 12).&#10;'Übernehmen' verteilt das bAV-Gesamtkapital gleichmäßig und ohne Verzinsung über den Entnahmezeitraum.&#10;Beispiel: 60.000 € ÷ (25 × 12) = 200 €/Monat.&#10;Betriebsrenten sind voll steuerpflichtig und unterliegen KV- und PV-Beiträgen.">i</span></label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="number" step="0.01" id="rl2_betriebsrente" placeholder="0.00" style="flex: 1;">
+                        <button class="btn btn-secondary" onclick="uebernahmeBetriebsrente2()" title="bAV-Gesamtkapital als monatliche Betriebsrente übernehmen (verteilt über den Entnahmezeitraum)" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
+                    </div>
                 </div>
                 <div class="input-group">
                     <label>Riester-Kapital 🅁<span class="info-icon" title="Angespartes Riester-Kapital, das als verfügbares Kapital über den Entnahmezeitraum entnommen wird.&#10;'Übernehmen' zieht die Summe der in den Einstellungen als Riester markierten Konten/Depots heran.&#10;Es wird zusätzlich zum bestehenden Vermögen verzinst und entnommen.">i</span></label>
@@ -573,6 +576,10 @@
                         <input type="number" step="0.01" id="rl2_riester_kapital" placeholder="0.00" style="flex: 1;">
                         <button class="btn btn-secondary" onclick="uebernahmeRiesterKapital2()" title="Riester-Vermögen als verfügbares Kapital übernehmen" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
                     </div>
+                </div>
+                <div class="input-group">
+                    <label>Riester-Rente brutto (monatl.) 🅁<span class="info-icon" title="Riester-Rente als zusätzliche monatliche Renteneinkunft.&#10;Wird in der Auszahlphase voll versteuert, ist aber für pflichtversicherte Rentner KV-/PV-beitragsfrei.">i</span></label>
+                    <input type="number" step="0.01" id="rl2_riester" placeholder="0.00">
                 </div>
             </div>
 
@@ -1515,7 +1522,7 @@
 
         // ── Rentenlücke – Daten speichern/laden ──────────────────
         const RL2_STORAGE_KEY = 'rentenluecke2_data';
-        const RL2_FIELDS = ['rl2_alter', 'rl2_rentenalter', 'rl2_verheiratet', 'rl2_kinder', 'rl2_gesetzliche_rente', 'rl2_rentensteigerung', 'rl2_betriebsrente', 'rl2_riester', 'rl2_riester_kapital', 'rl2_lta_wert', 'rl2_lta_option', 'rl2_lta_dauer', 'rl2_wunschrente', 'rl2_inflation', 'rl2_vermoegen', 'rl2_verzinsung', 'rl2_entnahmezeitraum'];
+        const RL2_FIELDS = ['rl2_alter', 'rl2_rentenalter', 'rl2_verheiratet', 'rl2_kinder', 'rl2_gesetzliche_rente', 'rl2_rentensteigerung', 'rl2_bav_kapital', 'rl2_betriebsrente', 'rl2_riester', 'rl2_riester_kapital', 'rl2_lta_wert', 'rl2_lta_option', 'rl2_lta_dauer', 'rl2_wunschrente', 'rl2_inflation', 'rl2_vermoegen', 'rl2_verzinsung', 'rl2_entnahmezeitraum'];
 
         function saveRL2Data() {
             const data = {};
@@ -1585,21 +1592,40 @@
             saveRL2Data();
         }
 
-        // Current bAV pot annuitized into a flat monthly Betriebsrente (no growth),
+        // Resolve the bAV capital to annuitize: prefer the manual
+        // bAV-Gesamtkapital field, else fall back to the bAV pot from the latest entry.
+        function currentBavKapital() {
+            const field = parseFloat(document.getElementById('rl2_bav_kapital').value);
+            if (!isNaN(field) && field > 0) return field;
+            if (AppState.entries.length === 0) return 0;
+            return calculateTotals(AppState.entries[0]).bav;
+        }
+
+        // bAV capital annuitized into a flat monthly Betriebsrente (no growth),
         // spread over the configured Entnahmezeitraum. Returns null if not computable.
         function currentBetriebsrenteMonatlich() {
-            if (AppState.entries.length === 0) return null;
-            const bav = calculateTotals(AppState.entries[0]).bav;
-            if (bav <= 0) return null;
+            const kapital = currentBavKapital();
+            if (kapital <= 0) return null;
             const jahre = parseInt(document.getElementById('rl2_entnahmezeitraum').value);
             if (!jahre || jahre <= 0) return null;
-            return annuitizeMonthly(bav, jahre);
+            return annuitizeMonthly(kapital, jahre);
+        }
+
+        // Pull the bAV pot from the latest entry into the bAV-Gesamtkapital field.
+        function uebernahmeBavKapital2() {
+            if (AppState.entries.length === 0) { alert('Keine Einträge vorhanden'); return; }
+            const bav = calculateTotals(AppState.entries[0]).bav;
+            if (bav <= 0) {
+                alert('Kein bAV-Vermögen vorhanden. Markiere zuerst ein Konto/Depot in den Einstellungen als bAV.');
+                return;
+            }
+            document.getElementById('rl2_bav_kapital').value = bav.toFixed(2);
+            saveRL2Data();
         }
 
         function uebernahmeBetriebsrente2() {
-            if (AppState.entries.length === 0) { alert('Keine Einträge vorhanden'); return; }
-            if (calculateTotals(AppState.entries[0]).bav <= 0) {
-                alert('Kein bAV-Vermögen vorhanden. Markiere zuerst ein Konto/Depot in den Einstellungen als bAV.');
+            if (currentBavKapital() <= 0) {
+                alert('Kein bAV-Kapital vorhanden. Übernimm zuerst das bAV-Gesamtkapital oder markiere ein Konto/Depot in den Einstellungen als bAV.');
                 return;
             }
             const monatlich = currentBetriebsrenteMonatlich();
@@ -1608,9 +1634,14 @@
             saveRL2Data();
         }
 
-        // Auto-fill the Betriebsrente from bAV only when the field is still empty,
-        // so manual edits are never overwritten.
+        // Auto-fill bAV-Gesamtkapital and Betriebsrente from the bAV pot, only
+        // while the fields are still empty so manual edits are never overwritten.
         function autoFillBetriebsrente() {
+            const kapitalField = document.getElementById('rl2_bav_kapital');
+            if ((kapitalField.value === '' || parseFloat(kapitalField.value) === 0) && AppState.entries.length > 0) {
+                const bav = calculateTotals(AppState.entries[0]).bav;
+                if (bav > 0) { kapitalField.value = bav.toFixed(2); saveRL2Data(); }
+            }
             const field = document.getElementById('rl2_betriebsrente');
             const current = parseFloat(field.value);
             if (field.value !== '' && current !== 0) return;
@@ -1718,6 +1749,7 @@
             const rentenalter = parseInt(document.getElementById('rl2_rentenalter').value);
             const gesetzlichBrutto = parseFloat(document.getElementById('rl2_gesetzliche_rente').value);
             const rentensteigerung = parseFloat(document.getElementById('rl2_rentensteigerung').value);
+            const bavKapital = parseFloat(document.getElementById('rl2_bav_kapital').value) || 0;
             const betriebsrenteBrutto = parseFloat(document.getElementById('rl2_betriebsrente').value) || 0;
             const riesterBrutto = parseFloat(document.getElementById('rl2_riester').value) || 0;
             const riesterKapital = parseFloat(document.getElementById('rl2_riester_kapital').value) || 0;
@@ -1738,7 +1770,7 @@
             if (rentenalter <= alter) {
                 return null;
             }
-            return { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, riesterBrutto, riesterKapital, ltaWert, ltaOption, ltaDauer, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder };
+            return { alter, rentenalter, gesetzlichBrutto, rentensteigerung, bavKapital, betriebsrenteBrutto, riesterBrutto, riesterKapital, ltaWert, ltaOption, ltaDauer, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder };
         }
 
         function calculateRL2(inputs) {
@@ -1816,7 +1848,7 @@
 
         function renderRL2Results(results, inputs) {
             const { jahresBisRente, renteneintrittsjahr, bestAnteil, vermoegenBeiRente, wunschNettoBeiRente, gesetzlichBeiRente, rentenNettoOhneEntnahme, benoetigteEntnahmeMonat1, benoetigtesKapital, vermoegenslücke, monatlicheSparrate, ohnEntnahme: r, pvSatz, ltaMonatlich, ltaKapital } = results;
-            const { betriebsrenteBrutto, riesterBrutto, riesterKapital, ltaWert, ltaOption, ltaDauer, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
+            const { bavKapital, betriebsrenteBrutto, riesterBrutto, riesterKapital, ltaWert, ltaOption, ltaDauer, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
             const LTA_OPTION_LABELS = { altersteilzeit: 'Altersteilzeit (vor Rente, informativ)', monatlich: 'Monatlich ab Rentenbeginn', einmal: 'Einmalbetrag bei Rentenbeginn' };
             const ltaInfo = ltaWert > 0
                 ? (ltaOption === 'monatlich' ? `${formatCurrency(ltaWert)} → ${formatCurrency(ltaMonatlich)}/Mon. über ${ltaDauer} J.`
@@ -1838,6 +1870,9 @@
                         </div>
                         <div style="font-size: 0.85rem; color: var(--text-secondary);">
                             Gesetzl. Rente brutto bei Eintritt: <strong style="color: var(--text-primary);">${formatCurrency(gesetzlichBeiRente)}</strong>
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                            bAV-Gesamtkapital: <strong style="color: var(--text-primary);">${formatCurrency(bavKapital)}</strong>
                         </div>
                         <div style="font-size: 0.85rem; color: var(--text-secondary);">
                             Betriebsrente brutto: <strong style="color: var(--text-primary);">${formatCurrency(betriebsrenteBrutto)}</strong>

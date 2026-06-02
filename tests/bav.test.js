@@ -68,10 +68,15 @@ sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 // `const`/`function` at top level don't attach to the context, so re-export the
 // symbols we want to test (the appended code shares the script's scope).
-const exportLine = '\nObject.assign(globalThis, { accounts, BANKS, Settings, isBav, isRiester, calculateTotals, annuitizeMonthly, bavIndicator, riesterIndicator });';
+const exportLine = '\nObject.assign(globalThis, { accounts, BANKS, Settings, AppState, isBav, isRiester, calculateTotals, annuitizeMonthly, bavIndicator, riesterIndicator, currentBavKapital, currentBetriebsrenteMonatlich });';
 vm.runInContext(scriptSrc + exportLine, sandbox);
 
-const { accounts, Settings, isBav, isRiester, calculateTotals, annuitizeMonthly, bavIndicator, riesterIndicator } = sandbox;
+const { accounts, Settings, AppState, isBav, isRiester, calculateTotals, annuitizeMonthly, bavIndicator, riesterIndicator, currentBavKapital, currentBetriebsrenteMonatlich } = sandbox;
+
+// Stub document.getElementById to serve values from a plain id→value map.
+function stubFields(map) {
+    sandbox.document.getElementById = id => ({ value: map[id] !== undefined ? map[id] : '' });
+}
 
 // Reset persisted settings + cache between tests for isolation.
 function reset() { store.clear(); Settings._data = null; }
@@ -188,6 +193,34 @@ test('riesterIndicator renders icon + German tooltip only for Riester accounts',
     assert.ok(on.includes('title="Riester-Vorsorge"'));
     assert.ok(on.includes('🅁'));
     assert.strictEqual(riesterIndicator(false), '');
+});
+
+test('currentBavKapital prefers the manual bAV-Gesamtkapital field', () => {
+    reset();
+    AppState.entries = [{ adidas_konto: 99999 }]; // would be the fallback
+    stubFields({ rl2_bav_kapital: '60000' });
+    assert.strictEqual(currentBavKapital(), 60000);
+});
+
+test('currentBavKapital falls back to the bAV pot when the field is empty', () => {
+    reset(); // adidas_konto is bAV by default
+    AppState.entries = [{ adidas_konto: 36000 }];
+    stubFields({ rl2_bav_kapital: '' });
+    assert.strictEqual(currentBavKapital(), 36000);
+});
+
+test('currentBetriebsrenteMonatlich annuitizes the bAV-Gesamtkapital over Entnahmezeitraum', () => {
+    reset();
+    AppState.entries = [];
+    stubFields({ rl2_bav_kapital: '60000', rl2_entnahmezeitraum: '25' });
+    assert.strictEqual(currentBetriebsrenteMonatlich(), 60000 / (25 * 12)); // 200 €/Mon.
+});
+
+test('currentBetriebsrenteMonatlich needs a payout period', () => {
+    reset();
+    AppState.entries = [];
+    stubFields({ rl2_bav_kapital: '60000', rl2_entnahmezeitraum: '' });
+    assert.strictEqual(currentBetriebsrenteMonatlich(), null);
 });
 
 // ── Runner ────────────────────────────────────────────────────────────────
