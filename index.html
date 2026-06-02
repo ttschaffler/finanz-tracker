@@ -938,9 +938,7 @@
             document.querySelectorAll('.time-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.range === range);
             });
-            const filtered = getFilteredEntries();
-            displayHistory(filtered);
-            renderChart(filtered);
+            renderFilteredViews();
         }
 
         // Custom date range from the Von/Bis pickers (overrides the preset buttons).
@@ -952,9 +950,7 @@
             AppState.customFrom = from || null;
             AppState.customTo = to || null;
             document.querySelectorAll('.time-btn').forEach(btn => btn.classList.remove('active'));
-            const filtered = getFilteredEntries();
-            displayHistory(filtered);
-            renderChart(filtered);
+            renderFilteredViews();
         }
 
         function getFilteredEntries() {
@@ -1058,10 +1054,16 @@
 
         // ── Display ───────────────────────────────────────────────────
         function refreshDisplay() {
-            const filtered = getFilteredEntries();
-            updateSummary(AppState.entries);
-            displayHistory(filtered);
+            renderFilteredViews();
             updateCompareSelects(AppState.entries);
+        }
+
+        // Render summary cards, history table and chart from the currently
+        // selected time range, so all displayed values share the same period.
+        function renderFilteredViews() {
+            const filtered = getFilteredEntries();
+            updateSummary(filtered);
+            displayHistory(filtered);
             renderChart(filtered);
         }
 

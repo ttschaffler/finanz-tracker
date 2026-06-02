@@ -68,10 +68,11 @@ sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 // `const`/`function` at top level don't attach to the context, so re-export the
 // symbols we want to test (the appended code shares the script's scope).
-const exportLine = '\nObject.assign(globalThis, { accounts, BANKS, Settings, AppState, isBav, isRiester, calculateTotals, annuitizeMonthly, bavIndicator, riesterIndicator, currentBavKapital, currentBetriebsrenteMonatlich, recomputeBetriebsrenteFromKapital });';
+const exportLine = '\nObject.assign(globalThis, { accounts, BANKS, Settings, AppState, isBav, isRiester, calculateTotals, annuitizeMonthly, bavIndicator, riesterIndicator, currentBavKapital, currentBetriebsrenteMonatlich, recomputeBetriebsrenteFromKapital, updateSummary });';
 vm.runInContext(scriptSrc + exportLine, sandbox);
 
-const { accounts, Settings, AppState, isBav, isRiester, calculateTotals, annuitizeMonthly, bavIndicator, riesterIndicator, currentBavKapital, currentBetriebsrenteMonatlich, recomputeBetriebsrenteFromKapital } = sandbox;
+const { accounts, Settings, AppState, isBav, isRiester, calculateTotals, annuitizeMonthly, bavIndicator, riesterIndicator, currentBavKapital, currentBetriebsrenteMonatlich, recomputeBetriebsrenteFromKapital, updateSummary } = sandbox;
+const eur = v => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(v);
 
 // Stub document.getElementById to serve values from a plain id→value map.
 function stubFields(map) {
@@ -243,6 +244,34 @@ test('recomputeBetriebsrenteFromKapital is a no-op without capital (manual value
     const els = stubElements({ rl2_bav_kapital: '', rl2_entnahmezeitraum: '25', rl2_betriebsrente: '350.00' });
     recomputeBetriebsrenteFromKapital();
     assert.strictEqual(els.rl2_betriebsrente.value, '350.00');
+});
+
+test('updateSummary fills the cards from the period latest entry + period change', () => {
+    reset();
+    const els = stubElements({});
+    // desc order: newest first, as the app keeps entries
+    updateSummary([{ tr_konto: 1000 }, { tr_konto: 700 }, { tr_konto: 500 }]);
+    assert.strictEqual(els.totalValue.textContent, eur(1000), 'Gesamtvermögen = latest in period');
+    assert.strictEqual(els.totalAccounts.textContent, eur(1000));
+    assert.ok(els.recentChangeValue.innerHTML.includes('300,00'), 'Letzte Veränderung = 1000-700');
+    assert.ok(els.totalChangeValue.innerHTML.includes('500,00'), 'Gesamt Veränderung = 1000-500');
+});
+
+test('updateSummary follows the passed (period) list for the total change', () => {
+    reset();
+    const els = stubElements({});
+    // A narrower period (omits the 500 entry) → Gesamt Veränderung is 1000-700.
+    updateSummary([{ tr_konto: 1000 }, { tr_konto: 700 }]);
+    assert.ok(els.totalChangeValue.innerHTML.includes('300,00'));
+    assert.ok(!els.totalChangeValue.innerHTML.includes('500,00'));
+});
+
+test('updateSummary shows zero/dashes for an empty period', () => {
+    reset();
+    const els = stubElements({});
+    updateSummary([]);
+    assert.strictEqual(els.totalValue.textContent, '€ 0');
+    assert.strictEqual(els.totalChangeValue.textContent, '-');
 });
 
 // ── Runner ────────────────────────────────────────────────────────────────
