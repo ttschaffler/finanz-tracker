@@ -295,6 +295,7 @@
             <button class="btn btn-primary" onclick="showAddEntryModal()">+ Neuer Eintrag</button>
             <button class="btn btn-secondary" onclick="showCompareModal()">Vergleichen</button>
             <button class="btn btn-secondary" onclick="exportData()">Export CSV</button>
+            <button class="btn btn-secondary" onclick="showSettingsModal()" title="Einstellungen">⚙ Einstellungen</button>
         </div>
 
         <div style="text-align: center; font-size: 0.9rem; margin-bottom: 1rem;">
@@ -316,6 +317,10 @@
             <div class="summary-card">
                 <div class="summary-label">Gesamt Depots</div>
                 <div class="summary-value" id="totalDepots">€ 0</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Betriebliche Altersvorsorge 🏢</div>
+                <div class="summary-value" id="totalBav">€ 0</div>
             </div>
             <div class="summary-card">
                 <div class="summary-label">Letzte Veränderung</div>
@@ -419,6 +424,24 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal: Einstellungen -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <h2 class="section-title">⚙ Einstellungen</h2>
+            <div class="input-section" style="margin: 0; box-shadow: none; border: none; background: transparent;">
+                <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">Betriebliche Altersvorsorge (bAV) 🏢</h3>
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+                    Wähle die Konten/Depots, die als betriebliche Altersvorsorge zählen. bAV wird separat ausgewiesen und fließt als Betriebsrente in die Rentenlücke ein.
+                </p>
+                <div id="bavSettingsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;"></div>
+                <div style="margin-top: 2rem; display: flex; gap: 1rem;">
+                    <button class="btn btn-primary" onclick="saveSettings()" style="flex: 1;">Speichern</button>
+                    <button class="btn btn-secondary" onclick="closeModal('settingsModal')">Abbrechen</button>
+                </div>
+            </div>
+        </div>
+    </div>
     </div> <!-- /tab-vermoegen -->
 
     <div id="tab-rentenluecke" class="tab-page">
@@ -458,8 +481,11 @@
                     <input type="number" step="0.1" id="rl2_rentensteigerung" placeholder="1.5">
                 </div>
                 <div class="input-group">
-                    <label>Betriebsrente brutto (monatl.)</label>
-                    <input type="number" step="0.01" id="rl2_betriebsrente" placeholder="0.00">
+                    <label>Betriebsrente brutto (monatl.) 🏢</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="number" step="0.01" id="rl2_betriebsrente" placeholder="0.00" style="flex: 1;">
+                        <button class="btn btn-secondary" onclick="uebernahmeBetriebsrente2()" title="bAV-Vermögen als monatliche Betriebsrente übernehmen (verteilt über den Entnahmezeitraum)" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
+                    </div>
                 </div>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
@@ -474,10 +500,10 @@
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
                 <div class="input-group">
-                    <label>Bestehendes Vermögen</label>
+                    <label>Bestehendes Vermögen (ohne bAV)</label>
                     <div style="display: flex; gap: 0.5rem;">
                         <input type="number" step="0.01" id="rl2_vermoegen" placeholder="0.00" style="flex: 1;">
-                        <button class="btn btn-secondary" onclick="uebernahmeVermoegen2()" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
+                        <button class="btn btn-secondary" onclick="uebernahmeVermoegen2()" title="Gesamtvermögen ohne bAV übernehmen (bAV fließt in die Betriebsrente)" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
                     </div>
                 </div>
                 <div class="input-group">
@@ -542,14 +568,45 @@
                 label: `${bank.label} ${acc.label}`,
                 type: acc.suffix === 'lta' ? 'lta' : acc.suffix,
                 bankPrefix: bank.prefix,
-                bav: acc.bav === true
+                defaultBav: acc.bav === true   // registry default; effective state lives in Settings
             }))
         );
 
+        // ── Settings (DIP: user-configurable, persisted in localStorage) ──
+        // Which accounts count as company pension (bAV). Falls back to the
+        // registry defaults until the user changes them in the settings dialog.
+        const SETTINGS_KEY = 'app_settings';
+        const Settings = {
+            _data: null,
+            _load() {
+                if (this._data === null) this._data = Storage.get(SETTINGS_KEY) || {};
+                return this._data;
+            },
+            getBavAccountIds() {
+                const stored = this._load().bavAccounts;
+                return Array.isArray(stored)
+                    ? stored
+                    : accounts.filter(a => a.defaultBav).map(a => a.id);
+            },
+            setBavAccountIds(ids) {
+                this._data = { ...this._load(), bavAccounts: [...ids] };
+                Storage.set(SETTINGS_KEY, this._data);
+            }
+        };
+        // Effective bAV flag for an account id (consults Settings).
+        function isBav(accountId) { return Settings.getBavAccountIds().includes(accountId); }
+
+        // Annuitize a bAV lump sum into a flat monthly amount (no growth):
+        // the pot is spread evenly across the payout period (Entnahmezeitraum).
+        function annuitizeMonthly(bavTotal, jahre) {
+            if (!jahre || jahre <= 0) return 0;
+            return bavTotal / (jahre * 12);
+        }
+
         // ── Indicator helper: marks an account as company pension (bAV) ──
         // Renders an icon + German tooltip, or an empty string for non-bAV accounts.
-        function bavIndicator(isBav) {
-            return isBav
+        function bavIndicator(isBavAccount) {
+            return isBavAccount
                 ? ' <span class="bav-badge" title="Betriebliche Altersvorsorge" aria-label="Betriebliche Altersvorsorge" role="img">🏢</span>'
                 : '';
         }
@@ -726,13 +783,14 @@
 
         // ── Pure Business Logic ───────────────────────────────────────
         function calculateTotals(entry) {
-            let konten = 0, depots = 0;
+            let konten = 0, depots = 0, bav = 0;
             accounts.forEach(acc => {
                 const v = entry[acc.id] || 0;
                 if (acc.type === 'konto') konten += v;
                 else depots += v;
+                if (isBav(acc.id)) bav += v;   // bAV is orthogonal to konto/depot
             });
-            return { total: konten + depots, konten, depots };
+            return { total: konten + depots, konten, depots, bav };
         }
 
         function formatChangeValue(newVal, oldVal) {
@@ -757,14 +815,15 @@
 
         function updateSummary(list) {
             if (list.length === 0) {
-                ['totalValue','totalAccounts','totalDepots'].forEach(id => { document.getElementById(id).textContent = '€ 0'; });
+                ['totalValue','totalAccounts','totalDepots','totalBav'].forEach(id => { document.getElementById(id).textContent = '€ 0'; });
                 ['recentChangeValue','totalChangeValue'].forEach(id => { document.getElementById(id).textContent = '-'; });
                 return;
             }
-            const { total, konten, depots } = calculateTotals(list[0]);
+            const { total, konten, depots, bav } = calculateTotals(list[0]);
             document.getElementById('totalValue').textContent    = Formatter.currency(total);
             document.getElementById('totalAccounts').textContent = Formatter.currency(konten);
             document.getElementById('totalDepots').textContent   = Formatter.currency(depots);
+            document.getElementById('totalBav').textContent      = Formatter.currency(bav);
 
             if (list.length > 1) {
                 const prevTotal = calculateTotals(list[1]).total;
@@ -871,7 +930,7 @@
                 <thead><tr><th>Konto</th><th>${Formatter.date(e1.date)}</th><th>${Formatter.date(e2.date)}</th><th>Differenz</th></tr></thead><tbody>`;
             accounts.forEach(acc => {
                 const v1 = e1[acc.id] || 0, v2 = e2[acc.id] || 0, diff = v2 - v1;
-                html += `<tr><td>${acc.label}${bavIndicator(acc.bav)}</td><td>${Formatter.currency(v1)}</td><td>${Formatter.currency(v2)}</td>
+                html += `<tr><td>${acc.label}${bavIndicator(isBav(acc.id))}</td><td>${Formatter.currency(v1)}</td><td>${Formatter.currency(v2)}</td>
                     <td class="${diff >= 0 ? 'positive' : 'negative'}" style="font-weight:600;">${Formatter.currency(diff)}</td></tr>`;
             });
             html += '</tbody></table></div>';
@@ -1125,6 +1184,36 @@
         function showCompareModal() { document.getElementById('compareModal').classList.add('active'); document.getElementById('comparisonResult').innerHTML = ''; }
         function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
+        // ── Settings (bAV designation) ───────────────────────────────
+        function generateBavSettings() {
+            return BANKS.map(bank => {
+                const rows = bank.accounts.map(acc => {
+                    const id = `${bank.prefix}_${acc.suffix}`;
+                    return `<label class="chart-checkbox" style="margin-bottom: 0.35rem;"><input type="checkbox" class="bav-setting" value="${id}"${isBav(id) ? ' checked' : ''}><span>${acc.label}</span></label>`;
+                }).join('');
+                return `<div style="border-left: 3px solid ${bank.color}; padding-left: 0.75rem;">
+                    <div style="font-weight: 600; color: ${bank.color}; margin-bottom: 0.5rem; font-size: 0.9rem;">${bank.label}</div>
+                    ${rows}
+                </div>`;
+            }).join('');
+        }
+        function showSettingsModal() {
+            document.getElementById('bavSettingsGrid').innerHTML = generateBavSettings();
+            document.getElementById('settingsModal').classList.add('active');
+        }
+        function saveSettings() {
+            const ids = [...document.querySelectorAll('#bavSettingsGrid .bav-setting:checked')].map(cb => cb.value);
+            Settings.setBavAccountIds(ids);
+            applyBavSettings();
+            closeModal('settingsModal');
+        }
+        // Re-render everything that depends on the bAV designation.
+        function applyBavSettings() {
+            initDynamicHTML();
+            loadChartPreferences();
+            refreshDisplay();
+        }
+
         // ── Helpers ───────────────────────────────────────────────────
         function clearInputs() { accounts.forEach(acc => { document.getElementById(acc.id).value = ''; }); }
 
@@ -1138,7 +1227,7 @@
                 bank.accounts.forEach((acc, i) => {
                     const cbId = `show${bank.cbPrefix}_${acc.suffix === 'lta' ? 'LTA' : acc.label}`;
                     const isLast = i === bank.accounts.length - 1 && bank.accounts.length <= 1;
-                    checkboxes += `<label class="chart-checkbox"${!isLast ? ' style="margin-bottom: 0.25rem;"' : ''}><input type="checkbox" id="${cbId}" onchange="updateChartDisplay()"><span>${acc.label}${bavIndicator(acc.bav)}</span></label>`;
+                    checkboxes += `<label class="chart-checkbox"${!isLast ? ' style="margin-bottom: 0.25rem;"' : ''}><input type="checkbox" id="${cbId}" onchange="updateChartDisplay()"><span>${acc.label}${bavIndicator(isBav(`${bank.prefix}_${acc.suffix}`))}</span></label>`;
                 });
                 return `<div style="border-left: 3px solid ${bank.color}; padding-left: 0.75rem;">
                     <div style="font-weight: 600; color: ${bank.color}; margin-bottom: 0.5rem; font-size: 0.9rem;">${bank.label}</div>
@@ -1151,7 +1240,7 @@
             return BANKS.map(bank => {
                 const inputs = bank.accounts.map((acc, i) => {
                     const isLast = i === bank.accounts.length - 1;
-                    return `<div class="input-group"${!isLast ? ' style="margin-bottom: 0.5rem;"' : ''}><label>${acc.label}${bavIndicator(acc.bav)}</label><input type="number" step="0.01" id="${bank.prefix}_${acc.suffix}" placeholder="0.00"></div>`;
+                    return `<div class="input-group"${!isLast ? ' style="margin-bottom: 0.5rem;"' : ''}><label>${acc.label}${bavIndicator(isBav(`${bank.prefix}_${acc.suffix}`))}</label><input type="number" step="0.01" id="${bank.prefix}_${acc.suffix}" placeholder="0.00"></div>`;
                 }).join('');
                 return `<div class="bank-column">
                     <div class="bank-header">${bank.label} <button class="copy-bank-btn" onclick="copyPreviousBank('${bank.prefix}')" title="Werte übernehmen">&#x25C0;</button></div>
@@ -1171,7 +1260,10 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('tab-' + tabName).classList.add('active');
             document.querySelector(`.tab-btn[onclick="switchTab('${tabName}')"]`).classList.add('active');
-            if (tabName === 'rentenluecke') loadRL2Data();
+            if (tabName === 'rentenluecke') {
+                loadRL2Data();
+                autoFillBetriebsrente();
+            }
         }
 
         // ── Rentenlücke – Daten speichern/laden ──────────────────
@@ -1205,8 +1297,44 @@
 
         function uebernahmeVermoegen2() {
             if (AppState.entries.length === 0) { alert('Keine Einträge vorhanden'); return; }
-            const total = calculateTotals(AppState.entries[0]).total;
-            document.getElementById('rl2_vermoegen').value = total.toFixed(2);
+            // bAV is represented via the Betriebsrente, so exclude it here to avoid double counting.
+            const { total, bav } = calculateTotals(AppState.entries[0]);
+            document.getElementById('rl2_vermoegen').value = (total - bav).toFixed(2);
+            saveRL2Data();
+        }
+
+        // Current bAV pot annuitized into a flat monthly Betriebsrente (no growth),
+        // spread over the configured Entnahmezeitraum. Returns null if not computable.
+        function currentBetriebsrenteMonatlich() {
+            if (AppState.entries.length === 0) return null;
+            const bav = calculateTotals(AppState.entries[0]).bav;
+            if (bav <= 0) return null;
+            const jahre = parseInt(document.getElementById('rl2_entnahmezeitraum').value);
+            if (!jahre || jahre <= 0) return null;
+            return annuitizeMonthly(bav, jahre);
+        }
+
+        function uebernahmeBetriebsrente2() {
+            if (AppState.entries.length === 0) { alert('Keine Einträge vorhanden'); return; }
+            if (calculateTotals(AppState.entries[0]).bav <= 0) {
+                alert('Kein bAV-Vermögen vorhanden. Markiere zuerst ein Konto/Depot in den Einstellungen als bAV.');
+                return;
+            }
+            const monatlich = currentBetriebsrenteMonatlich();
+            if (monatlich === null) { alert('Bitte zuerst den Entnahmezeitraum (Jahre) eingeben.'); return; }
+            document.getElementById('rl2_betriebsrente').value = monatlich.toFixed(2);
+            saveRL2Data();
+        }
+
+        // Auto-fill the Betriebsrente from bAV only when the field is still empty,
+        // so manual edits are never overwritten.
+        function autoFillBetriebsrente() {
+            const field = document.getElementById('rl2_betriebsrente');
+            const current = parseFloat(field.value);
+            if (field.value !== '' && current !== 0) return;
+            const monatlich = currentBetriebsrenteMonatlich();
+            if (monatlich === null) return;
+            field.value = monatlich.toFixed(2);
             saveRL2Data();
         }
 
