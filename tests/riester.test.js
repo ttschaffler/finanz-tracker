@@ -188,6 +188,31 @@ test('Tax (zvE) is unaffected by the health-insurance mode', () => {
     assert.ok(close(gkv.steuer, pkv.steuer));
 });
 
+function pkvInputs(o = {}) {
+    return baseInputs({ kvModus: 'privat', pkvBeitrag: 1000, pkvSteigerung: 0, pkvEntlastung: 0, ...o });
+}
+
+test('PKV: higher annual increase raises the premium at retirement (forecast to Rentenbeginn)', () => {
+    const flat = calculateRL2(pkvInputs({ pkvSteigerung: 0 }));
+    const rising = calculateRL2(pkvInputs({ pkvSteigerung: 4 }));
+    // First retirement year social cost (premium − RV-Zuschuss), monthly.
+    assert.ok(rising.jahresDetails[0].sozialMonat > flat.jahresDetails[0].sozialMonat,
+        'a rising premium compounds to a higher value at retirement');
+});
+
+test('PKV: the one-time relief at retirement lowers the premium', () => {
+    const ohne = calculateRL2(pkvInputs({ pkvEntlastung: 0 }));
+    const mit = calculateRL2(pkvInputs({ pkvEntlastung: 20 }));
+    assert.ok(mit.jahresDetails[0].sozialMonat < ohne.jahresDetails[0].sozialMonat,
+        'the retirement-entry relief reduces the PKV cost');
+});
+
+test('PKV: the premium keeps rising through retirement', () => {
+    const r = calculateRL2(pkvInputs({ pkvSteigerung: 4, entnahmezeitraum: 20 }));
+    assert.ok(r.jahresDetails[10].sozialMonat > r.jahresDetails[0].sozialMonat,
+        'the PKV social cost grows over the drawdown years');
+});
+
 let failed = 0;
 tests.forEach(([name, fn]) => {
     try { fn(); console.log(`  ✓ ${name}`); }
