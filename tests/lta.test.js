@@ -150,6 +150,21 @@ test('Option monatlich raises early net pension and reverts after the payout win
     assert.ok(withLta.nettoRenteVerlauf[0] > withLta.nettoRenteVerlauf[10]);
 });
 
+test('jahresDetails returns one monthly row per year with pension/withdrawal/tax/social', () => {
+    const r = calculateRL2(baseInputs({ entnahmezeitraum: 20, gesetzlichBrutto: 1500 }));
+    assert.strictEqual(r.jahresDetails.length, 21); // years 0..entnahmezeitraum
+    const row0 = r.jahresDetails[0];
+    assert.deepStrictEqual(Object.keys(row0).sort(), ['alter', 'entnahmeMonat', 'gesetzlMonat', 'jahr', 'sozialMonat', 'steuerMonat']);
+    // First row: state pension equals the (ungrown) monthly gross at retirement.
+    assert.ok(close(row0.gesetzlMonat, 1500));
+    // All amounts are non-negative monthly figures.
+    r.jahresDetails.forEach(d => {
+        assert.ok(d.entnahmeMonat >= 0 && d.steuerMonat >= 0 && d.sozialMonat >= 0);
+    });
+    // The state pension grows over time with the configured Rentensteigerung.
+    assert.ok(r.jahresDetails[10].gesetzlMonat > r.jahresDetails[0].gesetzlMonat);
+});
+
 let failed = 0;
 tests.forEach(([name, fn]) => {
     try { fn(); console.log(`  ✓ ${name}`); }

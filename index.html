@@ -1849,6 +1849,7 @@
             const nettoBedarfVerlauf = [];
             const nettoRenteVerlauf = [];
             const entnahmeVerlauf = [];
+            const jahresDetails = [];
             let aktVermoegen = vermoegenBeiRente;
 
             for (let j = 0; j <= entnahmezeitraum; j++) {
@@ -1862,6 +1863,14 @@
                 nettoBedarfVerlauf.push(Math.round(wunschNettoJ * 100) / 100);
                 nettoRenteVerlauf.push(Math.round(renteNettoJ * 100) / 100);
                 entnahmeVerlauf.push(Math.round(entnahmeJ * 100) / 100);
+                jahresDetails.push({
+                    jahr: renteneintrittsjahr + j,
+                    alter: rentenalter + j,
+                    gesetzlMonat: gesetzlJ,
+                    entnahmeMonat: entnahmeJ,
+                    steuerMonat: nettoOhne.steuer / 12,
+                    sozialMonat: nettoOhne.sozialAbgaben / 12
+                });
                 if (j < entnahmezeitraum) {
                     aktVermoegen = aktVermoegen * (1 + verzRate) - entnahmeJ * 12;
                 }
@@ -1884,11 +1893,11 @@
                 monatlicheSparrate = monatsZins > 0 ? vermoegenslücke * monatsZins / (Math.pow(1 + monatsZins, monate) - 1) : vermoegenslücke / monate;
             }
 
-            return { jahresBisRente, renteneintrittsjahr, bestAnteil, vermoegenBeiRente, wunschNettoBeiRente, gesetzlichBeiRente, rentenNettoOhneEntnahme, benoetigteEntnahmeMonat1, benoetigtesKapital, vermoegenslücke, monatlicheSparrate, ohnEntnahme, pvSatz, ltaMonatlich, ltaKapital, labels, vermoegenVerlauf, nettoBedarfVerlauf, nettoRenteVerlauf, entnahmeVerlauf };
+            return { jahresBisRente, renteneintrittsjahr, bestAnteil, vermoegenBeiRente, wunschNettoBeiRente, gesetzlichBeiRente, rentenNettoOhneEntnahme, benoetigteEntnahmeMonat1, benoetigtesKapital, vermoegenslücke, monatlicheSparrate, ohnEntnahme, pvSatz, ltaMonatlich, ltaKapital, labels, vermoegenVerlauf, nettoBedarfVerlauf, nettoRenteVerlauf, entnahmeVerlauf, jahresDetails };
         }
 
         function renderRL2Results(results, inputs) {
-            const { jahresBisRente, renteneintrittsjahr, bestAnteil, vermoegenBeiRente, wunschNettoBeiRente, gesetzlichBeiRente, rentenNettoOhneEntnahme, benoetigteEntnahmeMonat1, benoetigtesKapital, vermoegenslücke, monatlicheSparrate, ohnEntnahme: r, pvSatz, ltaMonatlich, ltaKapital } = results;
+            const { jahresBisRente, renteneintrittsjahr, bestAnteil, vermoegenBeiRente, wunschNettoBeiRente, gesetzlichBeiRente, rentenNettoOhneEntnahme, benoetigteEntnahmeMonat1, benoetigtesKapital, vermoegenslücke, monatlicheSparrate, ohnEntnahme: r, pvSatz, ltaMonatlich, ltaKapital, jahresDetails } = results;
             const { bavKapital, betriebsrenteBrutto, riesterBrutto, riesterKapital, ltaWert, ltaOption, ltaDauer, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
             const LTA_OPTION_LABELS = { altersteilzeit: 'Altersteilzeit (vor Rente, informativ)', monatlich: 'Monatlich ab Rentenbeginn', einmal: 'Einmalbetrag bei Rentenbeginn' };
             const ltaInfo = ltaWert > 0
@@ -2004,6 +2013,31 @@
                             </strong>
                         </div>
                     </div>` : ''}
+
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">Jahresübersicht (Beträge je Monat):</div>
+                        <div style="overflow: auto; max-height: 360px; border: 1px solid var(--border); border-radius: 12px;">
+                            <table class="history-table" style="margin-top: 0;">
+                                <thead><tr>
+                                    <th>Jahr (Alter)</th>
+                                    <th>Gesetzl. Rente</th>
+                                    <th>Entnahme Vermögen</th>
+                                    <th>Steuern</th>
+                                    <th>Sozialabgaben</th>
+                                </tr></thead>
+                                <tbody>
+                                    ${jahresDetails.map(d => `
+                                    <tr>
+                                        <td>${d.alter} (${d.jahr})</td>
+                                        <td>${formatCurrency(d.gesetzlMonat)}</td>
+                                        <td>${formatCurrency(d.entnahmeMonat)}</td>
+                                        <td>${formatCurrency(d.steuerMonat)}</td>
+                                        <td>${formatCurrency(d.sozialMonat)}</td>
+                                    </tr>`).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             `;
 
