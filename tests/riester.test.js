@@ -56,10 +56,10 @@ sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
 
 vm.createContext(sandbox);
-const exportLine = '\nObject.assign(globalThis, { berechneNetto, calculateRL2, KV_BETRIEB_VOLL, BETRIEBSRENTE_FREIGRENZE_MONAT });';
+const exportLine = '\nObject.assign(globalThis, { berechneNetto, calculateRL2, KV_BETRIEB_VOLL, BETRIEBSRENTE_FREIGRENZE_MONAT, KV_RENTNER_SATZ });';
 vm.runInContext(scriptSrc + exportLine, sandbox);
 
-const { berechneNetto, calculateRL2 } = sandbox;
+const { berechneNetto, calculateRL2, KV_RENTNER_SATZ } = sandbox;
 
 // Baseline inputs object for calculateRL2 (matches readRL2Inputs' shape).
 function baseInputs(overrides = {}) {
@@ -141,6 +141,51 @@ test('Riester-Kapital does not change the net pension (it is capital, not income
     const withKapital = calculateRL2(baseInputs({ riesterKapital: 50000 }));
     assert.ok(close(without.rentenNettoOhneEntnahme, withKapital.rentenNettoOhneEntnahme),
         'capital must not affect the taxed monthly pension');
+});
+
+test('GKV is the default: undefined kvModus equals explicit "gesetzlich"', () => {
+    const a = berechneNetto(1500, 400, 0, 0, BEST, false, PV);
+    const b = berechneNetto(1500, 400, 0, 0, BEST, false, PV, 'gesetzlich', 0);
+    assert.ok(close(a.sozialAbgaben, b.sozialAbgaben));
+    assert.ok(close(a.nettoGesamt, b.nettoGesamt));
+    assert.strictEqual(b.kvModus, 'gesetzlich');
+});
+
+test('PKV uses a fixed premium minus the RV-Zuschuss instead of percentages', () => {
+    const r = berechneNetto(1500, 400, 0, 0, BEST, false, PV, 'privat', 800);
+    const pkvJahr = 800 * 12;                       // 9600
+    const erwarteterZuschuss = 1500 * 12 * KV_RENTNER_SATZ; // < halber Beitrag
+    assert.ok(close(r.pkvBeitrag, pkvJahr));
+    assert.ok(close(r.rvZuschuss, erwarteterZuschuss));
+    assert.ok(close(r.sozialAbgaben, pkvJahr - erwarteterZuschuss));
+    // No percentage-based GKV contributions in PKV mode.
+    assert.strictEqual(r.kvGesetzl, 0);
+    assert.strictEqual(r.kvBetrieb, 0);
+    assert.strictEqual(r.kvModus, 'privat');
+});
+
+test('PKV premium is independent of the Betriebsrente (fixed contribution)', () => {
+    const ohneBetrieb = berechneNetto(1500, 0, 0, 0, BEST, false, PV, 'privat', 800);
+    const mitBetrieb = berechneNetto(1500, 1000, 0, 0, BEST, false, PV, 'privat', 800);
+    assert.ok(close(ohneBetrieb.sozialAbgaben, mitBetrieb.sozialAbgaben),
+        'extra Betriebsrente does not raise the PKV social cost');
+    // ...but the Betriebsrente is still taxed (zvE rises).
+    assert.ok(mitBetrieb.zvE > ohneBetrieb.zvE);
+});
+
+test('RV-Zuschuss is capped at half of the PKV premium', () => {
+    // Small premium → the half-premium cap binds, not the pension-based amount.
+    const r = berechneNetto(1500, 0, 0, 0, BEST, false, PV, 'privat', 100);
+    const pkvJahr = 100 * 12; // 1200
+    assert.ok(close(r.rvZuschuss, pkvJahr / 2), 'Zuschuss limited to half the premium');
+    assert.ok(close(r.sozialAbgaben, pkvJahr / 2));
+});
+
+test('Tax (zvE) is unaffected by the health-insurance mode', () => {
+    const gkv = berechneNetto(1500, 400, 0, 0, BEST, false, PV, 'gesetzlich', 0);
+    const pkv = berechneNetto(1500, 400, 0, 0, BEST, false, PV, 'privat', 800);
+    assert.ok(close(gkv.zvE, pkv.zvE));
+    assert.ok(close(gkv.steuer, pkv.steuer));
 });
 
 let failed = 0;

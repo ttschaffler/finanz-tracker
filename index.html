@@ -579,6 +579,17 @@
                     <label>Entnahmezeitraum (Jahre)</label>
                     <input type="number" id="rl2_entnahmezeitraum" placeholder="25" min="1" max="99">
                 </div>
+                <div class="input-group">
+                    <label>Krankenversicherung<span class="info-icon" title="Gesetzlich (KVdR): prozentuale KV-/PV-Beiträge auf gesetzliche Rente (halber Satz) und Betriebsrente/LTA (voller Satz oberhalb Freibetrag).&#10;Privat (PKV): fester Monatsbeitrag (KV+PV) abzüglich RV-Zuschuss (halber KV-Satz auf die gesetzliche Rente, max. halber PKV-Beitrag).">i</span></label>
+                    <select id="rl2_kv_modus" onchange="onKvModusChange()" style="width: 100%; padding: 0.75rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px; font-family: 'Work Sans', sans-serif; font-size: 0.95rem;">
+                        <option value="gesetzlich">Gesetzlich (GKV)</option>
+                        <option value="privat">Privat (PKV)</option>
+                    </select>
+                </div>
+                <div class="input-group" id="rl2_pkv_beitrag_group">
+                    <label>PKV-Beitrag (KV+PV, monatl.)<span class="info-icon" title="Monatlicher Krankenversicherungsbeitrag inkl. Pflegepflichtversicherung in der privaten Krankenversicherung. Der RV-Zuschuss wird automatisch abgezogen.">i</span></label>
+                    <input type="number" step="0.01" id="rl2_pkv_beitrag" placeholder="0.00">
+                </div>
             </div>
 
             <!-- Gruppe 2: bAV & Riester-Vermögen -->
@@ -1539,12 +1550,13 @@
                 loadRL2Data();
                 autoFillBetriebsrente();
                 updateLtaFieldsVisibility();
+                updateKvFieldsVisibility();
             }
         }
 
         // ── Rentenlücke – Daten speichern/laden ──────────────────
         const RL2_STORAGE_KEY = 'rentenluecke2_data';
-        const RL2_FIELDS = ['rl2_alter', 'rl2_rentenalter', 'rl2_verheiratet', 'rl2_kinder', 'rl2_gesetzliche_rente', 'rl2_rentensteigerung', 'rl2_bav_kapital', 'rl2_betriebsrente', 'rl2_riester', 'rl2_riester_kapital', 'rl2_lta_wert', 'rl2_lta_option', 'rl2_lta_dauer', 'rl2_wunschrente', 'rl2_inflation', 'rl2_vermoegen', 'rl2_verzinsung', 'rl2_entnahmezeitraum'];
+        const RL2_FIELDS = ['rl2_alter', 'rl2_rentenalter', 'rl2_verheiratet', 'rl2_kinder', 'rl2_gesetzliche_rente', 'rl2_rentensteigerung', 'rl2_bav_kapital', 'rl2_betriebsrente', 'rl2_riester', 'rl2_riester_kapital', 'rl2_lta_wert', 'rl2_lta_option', 'rl2_lta_dauer', 'rl2_wunschrente', 'rl2_inflation', 'rl2_vermoegen', 'rl2_verzinsung', 'rl2_entnahmezeitraum', 'rl2_kv_modus', 'rl2_pkv_beitrag'];
 
         function saveRL2Data() {
             const data = {};
@@ -1576,6 +1588,7 @@
             });
             loadRL2Data();
             updateLtaFieldsVisibility();
+            updateKvFieldsVisibility();
         });
 
         // Derive the monthly Betriebsrente from the bAV-Gesamtkapital field
@@ -1603,6 +1616,15 @@
         function updateLtaFieldsVisibility() {
             const opt = document.getElementById('rl2_lta_option').value;
             document.getElementById('rl2_lta_dauer_group').style.visibility = (opt === 'monatlich') ? 'visible' : 'hidden';
+        }
+        // Show the PKV-Beitrag field only for private health insurance.
+        function updateKvFieldsVisibility() {
+            const modus = document.getElementById('rl2_kv_modus').value;
+            document.getElementById('rl2_pkv_beitrag_group').style.visibility = (modus === 'privat') ? 'visible' : 'hidden';
+        }
+        function onKvModusChange() {
+            updateKvFieldsVisibility();
+            saveRL2Data();
         }
         function onLtaOptionChange() {
             updateLtaFieldsVisibility();
@@ -1759,19 +1781,31 @@
 
         // ── Rentenlücke Berechnung ────────────────────────────────
 
-        // Standalone netto calculation (ISP: explicit params, no closure dependency)
-        function berechneNetto(gesetzlBruttoMonat, betriebsBruttoMonat, riesterBruttoMonat, entnahmeMonat, bestAnteilFix, istVerheiratet, pvSatz) {
+        // Standalone netto calculation (ISP: explicit params, no closure dependency).
+        // kvModus: 'privat' → fester PKV-Beitrag (KV+PV) abzgl. RV-Zuschuss statt
+        // der prozentualen GKV-Beiträge. Default (undefined/'gesetzlich') = GKV/KVdR.
+        function berechneNetto(gesetzlBruttoMonat, betriebsBruttoMonat, riesterBruttoMonat, entnahmeMonat, bestAnteilFix, istVerheiratet, pvSatz, kvModus, pkvBeitragMonat) {
             const gesetzlJahr = gesetzlBruttoMonat * 12;
             const betriebsJahr = betriebsBruttoMonat * 12;
             // Riester-Renten sind in der Auszahlphase voll steuerpflichtig, für
             // pflichtversicherte Rentner aber KV-/PV-beitragsfrei.
             const riesterJahr = riesterBruttoMonat * 12;
-            const kvGesetzl = gesetzlJahr * KV_RENTNER_SATZ;
-            const pvGesetzl = gesetzlJahr * pvSatz;
-            const betriebsFreigrenze = BETRIEBSRENTE_FREIGRENZE_MONAT * 12;
-            const kvBetrieb = Math.max(0, betriebsJahr - betriebsFreigrenze) * KV_BETRIEB_VOLL;
-            const pvBetrieb = betriebsJahr * pvSatz;
-            const sozialAbgaben = kvGesetzl + pvGesetzl + kvBetrieb + pvBetrieb;
+            let kvGesetzl = 0, pvGesetzl = 0, kvBetrieb = 0, pvBetrieb = 0, pkvBeitrag = 0, rvZuschuss = 0, sozialAbgaben = 0;
+            if (kvModus === 'privat') {
+                // Privat versichert: fester Monatsbeitrag (KV+PV). Die Deutsche
+                // Rentenversicherung zahlt einen Beitragszuschuss = halber KV-Satz
+                // auf die gesetzliche Rente, max. die Hälfte des PKV-Beitrags.
+                pkvBeitrag = (pkvBeitragMonat || 0) * 12;
+                rvZuschuss = Math.min(gesetzlJahr * KV_RENTNER_SATZ, pkvBeitrag / 2);
+                sozialAbgaben = Math.max(0, pkvBeitrag - rvZuschuss);
+            } else {
+                kvGesetzl = gesetzlJahr * KV_RENTNER_SATZ;
+                pvGesetzl = gesetzlJahr * pvSatz;
+                const betriebsFreigrenze = BETRIEBSRENTE_FREIGRENZE_MONAT * 12;
+                kvBetrieb = Math.max(0, betriebsJahr - betriebsFreigrenze) * KV_BETRIEB_VOLL;
+                pvBetrieb = betriebsJahr * pvSatz;
+                sozialAbgaben = kvGesetzl + pvGesetzl + kvBetrieb + pvBetrieb;
+            }
             const steuerpflGesetzl = gesetzlJahr * bestAnteilFix;
             const steuerpflBetrieb = betriebsJahr;
             const steuerpflRiester = riesterJahr;
@@ -1782,7 +1816,7 @@
             const steuer = est + soli;
             const bruttoGesamt = gesetzlJahr + betriebsJahr + riesterJahr + entnahmeMonat * 12;
             const nettoGesamt = bruttoGesamt - sozialAbgaben - steuer;
-            return { nettoGesamt, sozialAbgaben, steuer, zvE, est, soli, kvGesetzl, pvGesetzl, kvBetrieb, pvBetrieb, riesterJahr, bestAnteilFix, steuerpflGesetzl, steuerpflBetrieb, steuerpflRiester, pvSatz };
+            return { nettoGesamt, sozialAbgaben, steuer, zvE, est, soli, kvGesetzl, pvGesetzl, kvBetrieb, pvBetrieb, riesterJahr, bestAnteilFix, steuerpflGesetzl, steuerpflBetrieb, steuerpflRiester, pvSatz, kvModus: kvModus === 'privat' ? 'privat' : 'gesetzlich', pkvBeitrag, rvZuschuss };
         }
 
         function readRL2Inputs() {
@@ -1804,6 +1838,8 @@
             const entnahmezeitraum = parseInt(document.getElementById('rl2_entnahmezeitraum').value);
             const istVerheiratet = document.getElementById('rl2_verheiratet').value === 'verheiratet';
             const anzahlKinder = parseInt(document.getElementById('rl2_kinder').value) || 0;
+            const kvModus = document.getElementById('rl2_kv_modus').value;
+            const pkvBeitrag = parseFloat(document.getElementById('rl2_pkv_beitrag').value) || 0;
 
             if (!alter || !rentenalter || isNaN(gesetzlichBrutto) || isNaN(rentensteigerung) || isNaN(wunschrenteNetto) || isNaN(inflation) || isNaN(verzinsung) || !entnahmezeitraum) {
                 return null;
@@ -1811,11 +1847,11 @@
             if (rentenalter <= alter) {
                 return null;
             }
-            return { alter, rentenalter, gesetzlichBrutto, rentensteigerung, bavKapital, betriebsrenteBrutto, riesterBrutto, riesterKapital, ltaWert, ltaOption, ltaDauer, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder };
+            return { alter, rentenalter, gesetzlichBrutto, rentensteigerung, bavKapital, betriebsrenteBrutto, riesterBrutto, riesterKapital, ltaWert, ltaOption, ltaDauer, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder, kvModus, pkvBeitrag };
         }
 
         function calculateRL2(inputs) {
-            const { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, riesterBrutto, riesterKapital, ltaWert, ltaOption, ltaDauer, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
+            const { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, riesterBrutto, riesterKapital, ltaWert, ltaOption, ltaDauer, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder, kvModus, pkvBeitrag } = inputs;
             const aktuellesJahr = new Date().getFullYear();
             const jahresBisRente = rentenalter - alter;
             const renteneintrittsjahr = aktuellesJahr + jahresBisRente;
@@ -1840,7 +1876,7 @@
             const wunschNettoBeiRente = wunschrenteNetto * Math.pow(1 + inflRate, jahresBisRente);
             const pvSatz = pvRentnerSatz(anzahlKinder);
 
-            const ohnEntnahme = berechneNetto(gesetzlichBeiRente, betriebJ(0), riesterBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
+            const ohnEntnahme = berechneNetto(gesetzlichBeiRente, betriebJ(0), riesterBrutto, 0, bestAnteil, istVerheiratet, pvSatz, kvModus, pkvBeitrag);
             const rentenNettoOhneEntnahme = ohnEntnahme.nettoGesamt / 12;
             const benoetigteEntnahmeMonat1 = Math.max(0, wunschNettoBeiRente - rentenNettoOhneEntnahme);
 
@@ -1856,7 +1892,7 @@
                 labels.push(`${rentenalter + j} (${renteneintrittsjahr + j})`);
                 const gesetzlJ = gesetzlichBeiRente * Math.pow(1 + steigRate, j);
                 const wunschNettoJ = wunschNettoBeiRente * Math.pow(1 + inflRate, j);
-                const nettoOhne = berechneNetto(gesetzlJ, betriebJ(j), riesterBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
+                const nettoOhne = berechneNetto(gesetzlJ, betriebJ(j), riesterBrutto, 0, bestAnteil, istVerheiratet, pvSatz, kvModus, pkvBeitrag);
                 const renteNettoJ = nettoOhne.nettoGesamt / 12;
                 const entnahmeJ = Math.max(0, wunschNettoJ - renteNettoJ);
                 vermoegenVerlauf.push(Math.round(aktVermoegen * 100) / 100);
@@ -1880,7 +1916,7 @@
             for (let j = 0; j < entnahmezeitraum; j++) {
                 const gesetzlJ = gesetzlichBeiRente * Math.pow(1 + steigRate, j);
                 const wunschNettoJ = wunschNettoBeiRente * Math.pow(1 + inflRate, j);
-                const nettoOhne = berechneNetto(gesetzlJ, betriebJ(j), riesterBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
+                const nettoOhne = berechneNetto(gesetzlJ, betriebJ(j), riesterBrutto, 0, bestAnteil, istVerheiratet, pvSatz, kvModus, pkvBeitrag);
                 const entnahmeJ = Math.max(0, wunschNettoJ - nettoOhne.nettoGesamt / 12) * 12;
                 benoetigtesKapital += entnahmeJ / Math.pow(1 + verzRate, j);
             }
@@ -1905,6 +1941,19 @@
                     : ltaOption === 'einmal' ? `${formatCurrency(ltaWert)} (Kapital in den Topf)`
                     : `${formatCurrency(ltaWert)} (vor Rente verbraucht, nicht eingerechnet)`)
                 : '–';
+            const istPrivat = r.kvModus === 'privat';
+            const kvInfo = istPrivat
+                ? 'privat (PKV)'
+                : `gesetzlich (GKV) · PV ${(pvSatz * 100).toFixed(1)} % (${anzahlKinder > 0 ? anzahlKinder + (anzahlKinder === 1 ? ' Kind' : ' Kinder') : 'kinderlos'})`;
+            const sozialRows = istPrivat
+                ? `<div>PKV-Beitrag (KV+PV): <strong style="color: var(--text-primary);">${formatCurrency(r.pkvBeitrag / 12)}/Mon.</strong></div>
+                   <div>abzgl. RV-Zuschuss: <strong style="color: var(--accent-emerald);">−${formatCurrency(r.rvZuschuss / 12)}/Mon.</strong></div>
+                   <div>Sozialabgaben netto: <strong style="color: var(--accent-ruby);">${formatCurrency(r.sozialAbgaben / 12)}/Mon.</strong></div>`
+                : `<div>KV gesetzl. Rente (${(KV_RENTNER_SATZ * 100).toFixed(2)} %): <strong style="color: var(--text-primary);">${formatCurrency(r.kvGesetzl / 12)}/Mon.</strong></div>
+                   <div>PV gesetzl. Rente (${(pvSatz * 100).toFixed(1)} %): <strong style="color: var(--text-primary);">${formatCurrency(r.pvGesetzl / 12)}/Mon.</strong></div>
+                   <div>KV Betriebsrente (${(KV_BETRIEB_VOLL * 100).toFixed(1)} %): <strong style="color: var(--text-primary);">${formatCurrency(r.kvBetrieb / 12)}/Mon.</strong></div>
+                   <div>PV Betriebsrente (${(pvSatz * 100).toFixed(1)} %): <strong style="color: var(--text-primary);">${formatCurrency(r.pvBetrieb / 12)}/Mon.</strong></div>
+                   <div>Sozialabgaben gesamt: <strong style="color: var(--accent-ruby);">${formatCurrency(r.sozialAbgaben / 12)}/Mon.</strong></div>`;
             const container = document.getElementById('rl2Result');
             container.innerHTML = `
                 <div style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border);">
@@ -1937,18 +1986,14 @@
                             LTA ⏳ (${LTA_OPTION_LABELS[ltaOption] || ltaOption}): <strong style="color: var(--text-primary);">${ltaInfo}</strong>
                         </div>
                         <div style="font-size: 0.85rem; color: var(--text-secondary);">
-                            PV-Satz: <strong style="color: var(--text-primary);">${(pvSatz * 100).toFixed(1)} %</strong> (${anzahlKinder > 0 ? anzahlKinder + (anzahlKinder === 1 ? ' Kind' : ' Kinder') : 'kinderlos'})
+                            Krankenversicherung: <strong style="color: var(--text-primary);">${kvInfo}</strong>
                         </div>
                     </div>
 
                     <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
                         <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">Sozialabgaben (1. Rentenjahr):</div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 2rem; font-size: 0.82rem; color: var(--text-secondary);">
-                            <div>KV gesetzl. Rente (${(KV_RENTNER_SATZ * 100).toFixed(2)} %): <strong style="color: var(--text-primary);">${formatCurrency(r.kvGesetzl / 12)}/Mon.</strong></div>
-                            <div>PV gesetzl. Rente (${(pvSatz * 100).toFixed(1)} %): <strong style="color: var(--text-primary);">${formatCurrency(r.pvGesetzl / 12)}/Mon.</strong></div>
-                            <div>KV Betriebsrente (${(KV_BETRIEB_VOLL * 100).toFixed(1)} %): <strong style="color: var(--text-primary);">${formatCurrency(r.kvBetrieb / 12)}/Mon.</strong></div>
-                            <div>PV Betriebsrente (${(pvSatz * 100).toFixed(1)} %): <strong style="color: var(--text-primary);">${formatCurrency(r.pvBetrieb / 12)}/Mon.</strong></div>
-                            <div>Sozialabgaben gesamt: <strong style="color: var(--accent-ruby);">${formatCurrency(r.sozialAbgaben / 12)}/Mon.</strong></div>
+                            ${sozialRows}
                         </div>
                     </div>
 
