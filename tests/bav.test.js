@@ -8,8 +8,8 @@
 const assert = require('assert');
 const { loadApp, createRunner } = require('./harness');
 
-const { sandbox, store } = loadApp(['accounts', 'BANKS', 'Settings', 'isBav', 'calculateTotals', 'annuitizeMonthly', 'bavIndicator']);
-const { Settings, isBav, calculateTotals, annuitizeMonthly, bavIndicator } = sandbox;
+const { sandbox, store } = loadApp(['accounts', 'BANKS', 'Settings', 'isBav', 'calculateTotals', 'calculateRetirementCapital', 'annuitizeMonthly', 'bavIndicator']);
+const { Settings, isBav, calculateTotals, calculateRetirementCapital, annuitizeMonthly, bavIndicator } = sandbox;
 
 // Reset persisted settings + cache between tests for isolation.
 function reset() { store.clear(); Settings._data = null; }
@@ -68,6 +68,50 @@ test('annuitizeMonthly guards invalid payout periods', () => {
     assert.strictEqual(annuitizeMonthly(12000, 0), 0);
     assert.strictEqual(annuitizeMonthly(12000, -5), 0);
     assert.strictEqual(annuitizeMonthly(12000, NaN), 0);
+});
+
+test('annuitizeMonthly with growth follows the annuity formula', () => {
+    const i = 0.03 / 12, n = 25 * 12;
+    const expected = 100000 * i / (1 - Math.pow(1 + i, -n));
+    assert.ok(Math.abs(annuitizeMonthly(100000, 25, 0.03) - expected) < 1e-9);
+    assert.ok(annuitizeMonthly(100000, 25, 0.03) > annuitizeMonthly(100000, 25),
+        'interest on the remaining pot must increase the monthly payout');
+    // A NaN rate falls back to the linear spread
+    assert.strictEqual(annuitizeMonthly(12000, 10, NaN), 100);
+});
+
+// ── Rentenlücke account exclusions (A1) ──────────────────────────────────
+test('no accounts are excluded by default', () => {
+    reset();
+    assert.strictEqual(Settings.getExcludedAccountIds().length, 0);
+    assert.strictEqual(calculateTotals({ vb_konto: 500 }).excluded, 0);
+});
+
+test('excluded accounts are summed separately and persist', () => {
+    reset();
+    Settings.setExcludedAccountIds(['vb_konto']);
+    const t = calculateTotals({ vb_konto: 5000, consors_depot: 2000 });
+    assert.strictEqual(t.excluded, 5000);
+    assert.strictEqual(t.total, 7000, 'total is unaffected by exclusion');
+    Settings._data = null;   // fresh cache must read back from storage
+    assert.strictEqual(JSON.stringify(Settings.getExcludedAccountIds()), '["vb_konto"]');
+});
+
+test('bAV takes precedence over exclusion (no double counting)', () => {
+    reset();
+    Settings.setBavAccountIds(['adidas_konto']);
+    Settings.setExcludedAccountIds(['adidas_konto']);
+    const t = calculateTotals({ adidas_konto: 3000 });
+    assert.strictEqual(t.bav, 3000);
+    assert.strictEqual(t.excluded, 0);
+});
+
+test('calculateRetirementCapital = total - bAV - excluded', () => {
+    reset();
+    Settings.setBavAccountIds(['adidas_konto']);
+    Settings.setExcludedAccountIds(['vb_konto']);
+    const entry = { adidas_konto: 1000, vb_konto: 2000, consors_depot: 4000 };
+    assert.strictEqual(calculateRetirementCapital(entry), 4000);
 });
 
 test('bavIndicator renders icon + German tooltip only for bAV accounts', () => {

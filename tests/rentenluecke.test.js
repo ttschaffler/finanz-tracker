@@ -8,12 +8,13 @@ const { loadApp, createRunner } = require('./harness');
 const { sandbox } = loadApp([
     'besteuerungsanteil', 'einkommensteuerGrund', 'einkommensteuer',
     'solidaritaetszuschlag', 'pvRentnerSatz', 'berechneNetto', 'calculateRL2',
-    'annuitizeMonthly',
+    'annuitizeMonthly', 'taxParamsForYear', 'TAX_PARAMS_BY_YEAR',
     'KV_RENTNER_SATZ', 'KV_BETRIEB_VOLL', 'BETRIEBSRENTE_FREIGRENZE_MONAT'
 ]);
 const {
     besteuerungsanteil, einkommensteuerGrund, einkommensteuer,
     solidaritaetszuschlag, pvRentnerSatz, berechneNetto, calculateRL2,
+    taxParamsForYear, TAX_PARAMS_BY_YEAR,
     KV_RENTNER_SATZ, KV_BETRIEB_VOLL, BETRIEBSRENTE_FREIGRENZE_MONAT
 } = sandbox;
 
@@ -153,6 +154,38 @@ test('calculateRL2: Betriebsrente reduces the monthly gap', () => {
     const withBav = calculateRL2({ ...baseInputs, betriebsrenteBrutto: 400 });
     assert.ok(withBav.benoetigteEntnahmeMonat1 < without.benoetigteEntnahmeMonat1);
     assert.ok(withBav.benoetigtesKapital < without.benoetigtesKapital);
+});
+
+// ── Tax parameter table (B1) ─────────────────────────────────────────────
+test('taxParamsForYear picks the latest year <= requested, fallback earliest', () => {
+    assert.strictEqual(taxParamsForYear(2025), TAX_PARAMS_BY_YEAR[2025]);
+    assert.strictEqual(taxParamsForYear(2040), TAX_PARAMS_BY_YEAR[2025], 'future years use the latest known set');
+    assert.strictEqual(taxParamsForYear(2000), TAX_PARAMS_BY_YEAR[2025], 'years before the table use the earliest set');
+});
+
+test('einkommensteuerGrund honors an injected parameter set', () => {
+    const custom = { ...TAX_PARAMS_BY_YEAR[2025].tarif, grundfreibetrag: 20000 };
+    assert.strictEqual(einkommensteuerGrund(15000, custom), 0, 'higher Grundfreibetrag exempts 15k');
+    assert.ok(einkommensteuerGrund(15000) > 0, 'default 2025 set still taxes 15k');
+});
+
+// ── Separate drawdown return (B5) ────────────────────────────────────────
+test('calculateRL2: lower Ruhestand return raises the capital need, leaves accumulation untouched', () => {
+    const base = calculateRL2(baseInputs);
+    const safer = calculateRL2({ ...baseInputs, verzinsungRuhestand: 2 });
+    assert.ok(safer.benoetigtesKapital > base.benoetigtesKapital);
+    approx(safer.vermoegenBeiRente, base.vermoegenBeiRente, 0.01, 'Ansparphase keeps its own rate');
+    assert.strictEqual(base.verzinsungRuhestand, baseInputs.verzinsung, 'fallback: drawdown = accumulation rate');
+});
+
+// ── Withdrawal tax gross-up (B3) ─────────────────────────────────────────
+test('calculateRL2: withdrawal tax grosses up the Entnahme and the capital need', () => {
+    const noTax = calculateRL2(baseInputs);
+    const taxed = calculateRL2({ ...baseInputs, entnahmeSteuer: 20 });
+    approx(taxed.entnahmeVerlauf[0], noTax.entnahmeVerlauf[0] / 0.8, 0.02);
+    approx(taxed.benoetigtesKapital, noTax.benoetigtesKapital / 0.8, 1);
+    assert.strictEqual(taxed.benoetigteEntnahmeMonat1, noTax.benoetigteEntnahmeMonat1,
+        'the displayed net gap is unaffected by the gross-up');
 });
 
 run();

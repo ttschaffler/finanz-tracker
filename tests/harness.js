@@ -53,6 +53,7 @@ function loadApp(exportNames) {
     const sandbox = {
         firebase, localStorage, console,
         Intl, Date, Math, JSON, parseFloat, parseInt, isFinite, isNaN, Array, Object, Number, String,
+        setTimeout, clearTimeout,
         alert() {}, confirm() { return true; },
         Chart: function () {},
         document: {

@@ -435,6 +435,11 @@
                     Wähle die Konten/Depots, die als betriebliche Altersvorsorge zählen. bAV wird separat ausgewiesen und fließt als Betriebsrente in die Rentenlücke ein.
                 </p>
                 <div id="bavSettingsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;"></div>
+                <h3 style="font-size: 1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Rentenlücke: Konten ausschließen 🚫</h3>
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+                    Diese Konten/Depots werden bei der Vermögens-Übernahme in den Rentenlücken-Rechner ignoriert (z.&nbsp;B. Notgroschen oder zweckgebundenes Geld). bAV-Konten fließen automatisch als Betriebsrente ein und müssen hier nicht ausgewählt werden.
+                </p>
+                <div id="rlExcludeSettingsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;"></div>
                 <div style="margin-top: 2rem; display: flex; gap: 1rem;">
                     <button class="btn btn-primary" onclick="saveSettings()" style="flex: 1;">Speichern</button>
                     <button class="btn btn-secondary" onclick="closeModal('settingsModal')">Abbrechen</button>
@@ -503,11 +508,11 @@
                     <label>Bestehendes Vermögen (ohne bAV)</label>
                     <div style="display: flex; gap: 0.5rem;">
                         <input type="number" step="0.01" id="rl2_vermoegen" placeholder="0.00" style="flex: 1;">
-                        <button class="btn btn-secondary" onclick="uebernahmeVermoegen2()" title="Gesamtvermögen ohne bAV übernehmen (bAV fließt in die Betriebsrente)" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
+                        <button class="btn btn-secondary" onclick="uebernahmeVermoegen2()" title="Vermögen aus der Übersicht übernehmen (ohne bAV und ohne ausgeschlossene Konten, siehe Einstellungen)" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">Übernehmen</button>
                     </div>
                 </div>
                 <div class="input-group">
-                    <label>Verzinsung Vermögen (% p.a.)</label>
+                    <label>Verzinsung bis Rente (% p.a.)</label>
                     <input type="number" step="0.1" id="rl2_verzinsung" placeholder="5.0">
                 </div>
                 <div class="input-group">
@@ -515,6 +520,20 @@
                     <input type="number" id="rl2_entnahmezeitraum" placeholder="25" min="1" max="99">
                 </div>
             </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                <div class="input-group">
+                    <label>Verzinsung im Ruhestand (% p.a.)</label>
+                    <input type="number" step="0.1" id="rl2_verzinsung_ruhestand" placeholder="wie bis Rente" title="Rendite in der Entnahmephase, z. B. niedriger durch Umschichtung in sicherere Anlagen. Leer = wie bis Rente.">
+                </div>
+                <div class="input-group">
+                    <label>Steuersatz auf Entnahmen (%)</label>
+                    <input type="number" step="0.1" id="rl2_entnahme_steuer" placeholder="0" min="0" max="99" title="Effektiver Steuersatz auf Depot-Entnahmen (z. B. Abgeltungsteuer auf den Gewinnanteil). 0 = Entnahmen steuerfrei.">
+                </div>
+            </div>
+            <label class="chart-checkbox" style="margin-top: 1.25rem;">
+                <input type="checkbox" id="rl2_autolink" onchange="onAutoLinkChange()">
+                <span>Vermögen &amp; Betriebsrente automatisch aus der Vermögensübersicht übernehmen</span>
+            </label>
             <div style="margin-top: 1.5rem;">
                 <button class="btn btn-primary" onclick="berechneRentenluecke2()" style="width: 100%;">Berechnen</button>
             </div>
@@ -582,6 +601,10 @@
                 if (this._data === null) this._data = Storage.get(SETTINGS_KEY) || {};
                 return this._data;
             },
+            _persist() {
+                Storage.set(SETTINGS_KEY, this._data);
+                RemoteSettings.push({ appSettings: this._data });
+            },
             getBavAccountIds() {
                 const stored = this._load().bavAccounts;
                 return Array.isArray(stored)
@@ -590,17 +613,31 @@
             },
             setBavAccountIds(ids) {
                 this._data = { ...this._load(), bavAccounts: [...ids] };
-                Storage.set(SETTINGS_KEY, this._data);
+                this._persist();
+            },
+            // Accounts excluded from the Rentenlücke wealth takeover
+            // (e.g. emergency funds or earmarked money).
+            getExcludedAccountIds() {
+                const stored = this._load().rlExcludedAccounts;
+                return Array.isArray(stored) ? stored : [];
+            },
+            setExcludedAccountIds(ids) {
+                this._data = { ...this._load(), rlExcludedAccounts: [...ids] };
+                this._persist();
             }
         };
         // Effective bAV flag for an account id (consults Settings).
         function isBav(accountId) { return Settings.getBavAccountIds().includes(accountId); }
 
-        // Annuitize a bAV lump sum into a flat monthly amount (no growth):
-        // the pot is spread evenly across the payout period (Entnahmezeitraum).
-        function annuitizeMonthly(bavTotal, jahre) {
+        // Annuitize a bAV lump sum into a flat monthly amount over the payout
+        // period (Entnahmezeitraum). With `jahresZins` the remaining pot keeps
+        // earning interest (annuity formula); without it the pot is spread evenly.
+        function annuitizeMonthly(bavTotal, jahre, jahresZins = 0) {
             if (!jahre || jahre <= 0) return 0;
-            return bavTotal / (jahre * 12);
+            const monate = jahre * 12;
+            const i = jahresZins / 12;
+            if (!i) return bavTotal / monate;   // also covers NaN
+            return bavTotal * i / (1 - Math.pow(1 + i, -monate));
         }
 
         // ── Indicator helper: marks an account as company pension (bAV) ──
@@ -657,6 +694,41 @@
             async remove(id) { return this.collection.doc(id).delete(); }
         };
 
+        // ── RemoteSettings (C1: cross-device settings in Firestore) ──
+        // localStorage stays the fast/offline cache; the cloud copy wins on login.
+        const RemoteSettings = {
+            doc: null,
+            init(docRef) { this.doc = docRef; },
+            reset() { this.doc = null; },
+            async pull() {
+                if (!this.doc) return null;
+                try {
+                    const snap = await this.doc.get();
+                    return snap.exists ? snap.data() : null;
+                } catch (err) {
+                    console.warn('Einstellungen konnten nicht geladen werden:', err);
+                    return null;
+                }
+            },
+            push(partial) {
+                if (!this.doc) return;
+                this.doc.set(partial, { merge: true })
+                    .catch(err => console.warn('Einstellungen konnten nicht gespeichert werden:', err));
+            }
+        };
+
+        async function syncSettingsFromCloud() {
+            const data = await RemoteSettings.pull();
+            if (!data) return;
+            if (data.appSettings) {
+                Storage.set(SETTINGS_KEY, data.appSettings);
+                Settings._data = null;
+            }
+            if (data.rentenluecke) Storage.set(RL2_STORAGE_KEY, data.rentenluecke);
+            applyBavSettings();
+            loadRL2Data();
+        }
+
         // ── AppState (DIP: encapsulates global mutable state) ────
         const AppState = {
             entries: [],
@@ -685,6 +757,7 @@
             if (user) {
                 AppState.currentUser = user;
                 DataStore.init(db.collection('users').doc(user.uid).collection('entries'));
+                RemoteSettings.init(db.collection('users').doc(user.uid).collection('settings').doc('app'));
                 document.getElementById('loginScreen').style.display  = 'none';
                 document.getElementById('appContent').style.display   = 'block';
                 document.getElementById('headerUser').innerHTML =
@@ -693,10 +766,12 @@
                     `<button class="btn-logout" onclick="signOutUser()">Abmelden</button>`;
                 loadChartPreferences();
                 initFirebase();
+                syncSettingsFromCloud();
             } else {
                 AppState.currentUser = null;
                 DataStore.stopListening();
                 DataStore.collection = null;
+                RemoteSettings.reset();
                 AppState.entries = [];
                 document.getElementById('loginScreen').style.display  = 'flex';
                 document.getElementById('appContent').style.display   = 'none';
@@ -791,14 +866,23 @@
         // ── Pure Business Logic ───────────────────────────────────────
         function calculateTotals(entry) {
             const bavIds = new Set(Settings.getBavAccountIds());
-            let konten = 0, depots = 0, bav = 0;
+            const excludedIds = new Set(Settings.getExcludedAccountIds());
+            let konten = 0, depots = 0, bav = 0, excluded = 0;
             accounts.forEach(acc => {
                 const v = entry[acc.id] || 0;
                 if (acc.type === 'konto') konten += v;
                 else depots += v;
-                if (bavIds.has(acc.id)) bav += v;   // bAV is orthogonal to konto/depot
+                if (bavIds.has(acc.id)) bav += v;            // bAV is orthogonal to konto/depot
+                else if (excludedIds.has(acc.id)) excluded += v; // bAV takes precedence over exclusion
             });
-            return { total: konten + depots, konten, depots, bav };
+            return { total: konten + depots, konten, depots, bav, excluded };
+        }
+
+        // Capital available for retirement planning: total wealth minus bAV
+        // (flows in as Betriebsrente) minus accounts excluded in the settings.
+        function calculateRetirementCapital(entry) {
+            const { total, bav, excluded } = calculateTotals(entry);
+            return total - bav - excluded;
         }
 
         function formatChangeValue(newVal, oldVal) {
@@ -819,6 +903,7 @@
             displayHistory(filtered);
             updateCompareSelects(AppState.entries);
             renderChart(filtered);
+            applyAutoUebernahme();   // keep linked Rentenlücke fields in sync with new data
         }
 
         function updateSummary(list) {
@@ -1195,12 +1280,13 @@
         function showCompareModal() { document.getElementById('compareModal').classList.add('active'); document.getElementById('comparisonResult').innerHTML = ''; }
         function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
-        // ── Settings (bAV designation) ───────────────────────────────
-        function generateBavSettings() {
+        // ── Settings (bAV designation + Rentenlücke exclusions) ──────
+        // Shared checkbox grid generator (one column per bank).
+        function generateAccountSelectionGrid(cssClass, isChecked) {
             return BANKS.map(bank => {
                 const rows = bank.accounts.map(acc => {
                     const id = `${bank.prefix}_${acc.suffix}`;
-                    return `<label class="chart-checkbox" style="margin-bottom: 0.35rem;"><input type="checkbox" class="bav-setting" value="${id}"${isBav(id) ? ' checked' : ''}><span>${acc.label}</span></label>`;
+                    return `<label class="chart-checkbox" style="margin-bottom: 0.35rem;"><input type="checkbox" class="${cssClass}" value="${id}"${isChecked(id) ? ' checked' : ''}><span>${acc.label}</span></label>`;
                 }).join('');
                 return `<div style="border-left: 3px solid ${bank.color}; padding-left: 0.75rem;">
                     <div style="font-weight: 600; color: ${bank.color}; margin-bottom: 0.5rem; font-size: 0.9rem;">${bank.label}</div>
@@ -1209,12 +1295,16 @@
             }).join('');
         }
         function showSettingsModal() {
-            document.getElementById('bavSettingsGrid').innerHTML = generateBavSettings();
+            document.getElementById('bavSettingsGrid').innerHTML = generateAccountSelectionGrid('bav-setting', isBav);
+            document.getElementById('rlExcludeSettingsGrid').innerHTML =
+                generateAccountSelectionGrid('rl-exclude-setting', id => Settings.getExcludedAccountIds().includes(id));
             document.getElementById('settingsModal').classList.add('active');
         }
         function saveSettings() {
-            const ids = [...document.querySelectorAll('#bavSettingsGrid .bav-setting:checked')].map(cb => cb.value);
-            Settings.setBavAccountIds(ids);
+            const bavIds = [...document.querySelectorAll('#bavSettingsGrid .bav-setting:checked')].map(cb => cb.value);
+            const excludeIds = [...document.querySelectorAll('#rlExcludeSettingsGrid .rl-exclude-setting:checked')].map(cb => cb.value);
+            Settings.setBavAccountIds(bavIds);
+            Settings.setExcludedAccountIds(excludeIds);
             applyBavSettings();
             closeModal('settingsModal');
         }
@@ -1273,28 +1363,37 @@
             document.querySelector(`.tab-btn[onclick="switchTab('${tabName}')"]`).classList.add('active');
             if (tabName === 'rentenluecke') {
                 loadRL2Data();
+                applyAutoUebernahme();
                 autoFillBetriebsrente();
             }
         }
 
         // ── Rentenlücke – Daten speichern/laden ──────────────────
         const RL2_STORAGE_KEY = 'rentenluecke2_data';
-        const RL2_FIELDS = ['rl2_alter', 'rl2_rentenalter', 'rl2_verheiratet', 'rl2_kinder', 'rl2_gesetzliche_rente', 'rl2_rentensteigerung', 'rl2_betriebsrente', 'rl2_wunschrente', 'rl2_inflation', 'rl2_vermoegen', 'rl2_verzinsung', 'rl2_entnahmezeitraum'];
+        const RL2_FIELDS = ['rl2_alter', 'rl2_rentenalter', 'rl2_verheiratet', 'rl2_kinder', 'rl2_gesetzliche_rente', 'rl2_rentensteigerung', 'rl2_betriebsrente', 'rl2_wunschrente', 'rl2_inflation', 'rl2_vermoegen', 'rl2_verzinsung', 'rl2_verzinsung_ruhestand', 'rl2_entnahme_steuer', 'rl2_entnahmezeitraum', 'rl2_autolink'];
 
+        let rl2CloudPushTimer = null;
         function saveRL2Data() {
             const data = {};
-            RL2_FIELDS.forEach(id => { data[id] = document.getElementById(id).value; });
+            RL2_FIELDS.forEach(id => {
+                const el = document.getElementById(id);
+                data[id] = el.type === 'checkbox' ? el.checked : el.value;
+            });
             Storage.set(RL2_STORAGE_KEY, data);
+            // Debounced cloud sync: saveRL2Data fires on every keystroke.
+            clearTimeout(rl2CloudPushTimer);
+            rl2CloudPushTimer = setTimeout(() => RemoteSettings.push({ rentenluecke: data }), 1000);
         }
 
         function loadRL2Data() {
             const data = Storage.get(RL2_STORAGE_KEY);
             if (!data) return;
             RL2_FIELDS.forEach(id => {
-                if (data[id] !== undefined && data[id] !== '') {
-                    document.getElementById(id).value = data[id];
-                }
+                const el = document.getElementById(id);
+                if (el.type === 'checkbox') el.checked = data[id] === true;
+                else if (data[id] !== undefined && data[id] !== '') el.value = data[id];
             });
+            syncAutoLinkUI();
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -1308,21 +1407,51 @@
 
         function uebernahmeVermoegen2() {
             if (AppState.entries.length === 0) { alert('Keine Einträge vorhanden'); return; }
-            // bAV is represented via the Betriebsrente, so exclude it here to avoid double counting.
-            const { total, bav } = calculateTotals(AppState.entries[0]);
-            document.getElementById('rl2_vermoegen').value = (total - bav).toFixed(2);
+            // bAV is represented via the Betriebsrente, excluded accounts per settings.
+            document.getElementById('rl2_vermoegen').value = calculateRetirementCapital(AppState.entries[0]).toFixed(2);
             saveRL2Data();
         }
 
-        // Current bAV pot annuitized into a flat monthly Betriebsrente (no growth),
-        // spread over the configured Entnahmezeitraum. Returns null if not computable.
+        // Current bAV pot annuitized into a monthly Betriebsrente over the
+        // configured Entnahmezeitraum, using the Ruhestand return if given.
+        // Returns null if not computable.
         function currentBetriebsrenteMonatlich() {
             if (AppState.entries.length === 0) return null;
             const bav = calculateTotals(AppState.entries[0]).bav;
             if (bav <= 0) return null;
             const jahre = parseInt(document.getElementById('rl2_entnahmezeitraum').value);
             if (!jahre || jahre <= 0) return null;
-            return annuitizeMonthly(bav, jahre);
+            const zinsRuhestand = parseFloat(document.getElementById('rl2_verzinsung_ruhestand').value);
+            const zinsAnspar = parseFloat(document.getElementById('rl2_verzinsung').value);
+            const zins = !isNaN(zinsRuhestand) ? zinsRuhestand : (!isNaN(zinsAnspar) ? zinsAnspar : 0);
+            return annuitizeMonthly(bav, jahre, zins / 100);
+        }
+
+        // ── Live-Verknüpfung mit der Vermögensübersicht (A2) ─────
+        function syncAutoLinkUI() {
+            const linked = document.getElementById('rl2_autolink').checked;
+            ['rl2_vermoegen', 'rl2_betriebsrente'].forEach(id => {
+                const el = document.getElementById(id);
+                el.readOnly = linked;
+                el.title = linked ? 'Automatisch aus der Vermögensübersicht übernommen (Verknüpfung lösen über die Checkbox)' : '';
+            });
+        }
+
+        // Re-reads the latest entry into the linked fields. Safe to call often;
+        // does nothing unless the link checkbox is active and data exists.
+        function applyAutoUebernahme() {
+            if (!document.getElementById('rl2_autolink').checked) return;
+            if (AppState.entries.length === 0) return;
+            document.getElementById('rl2_vermoegen').value = calculateRetirementCapital(AppState.entries[0]).toFixed(2);
+            const monatlich = currentBetriebsrenteMonatlich();
+            if (monatlich !== null) document.getElementById('rl2_betriebsrente').value = monatlich.toFixed(2);
+            saveRL2Data();
+        }
+
+        function onAutoLinkChange() {
+            syncAutoLinkUI();
+            applyAutoUebernahme();
+            saveRL2Data();
         }
 
         function uebernahmeBetriebsrente2() {
@@ -1351,6 +1480,35 @@
 
         // ── Deutsche Rentenbesteuerung ──────────────────────────────
 
+        // Steuer- und Abgabenparameter pro Veranlagungsjahr (OCP: neue Jahre
+        // hier ergänzen, taxParamsForYear wählt den jüngsten passenden Satz).
+        const TAX_PARAMS_BY_YEAR = {
+            2025: {
+                tarif: {   // § 32a EStG Grundtarif
+                    grundfreibetrag: 12084,
+                    zone2Ende: 17005,  zone2: { a: 932.30, b: 1400 },
+                    zone3Ende: 66760,  zone3: { a: 176.72, b: 2397, c: 1025.38 },
+                    zone4Ende: 277825, zone4: { satz: 0.42, abzug: 10636.31 },
+                    zone5: { satz: 0.45, abzug: 18971.06 }
+                },
+                soli: { freigrenze: 18130, satz: 0.055, milderungssatz: 0.119 },
+                kvAllgemeinHalb: 0.073,            // 7,3 % (halber allgemeiner Satz)
+                kvZusatzHalb: 0.0085,              // ~0,85 % (halber Ø-Zusatzbeitrag)
+                kvBetriebVoll: 0.146 + 0.017,      // ~16,3 % (AG+AN auf Betriebsrente)
+                betriebsrenteFreigrenzeMonat: 176.75,
+                pvKinderlos: 0.04,                 // PV vereinfacht: kinderlos vs. hat(te) Kinder
+                pvMitKind: 0.034,
+                werbungskostenPauschale: 102
+            }
+        };
+        function taxParamsForYear(jahr) {
+            const years = Object.keys(TAX_PARAMS_BY_YEAR).map(Number).sort((a, b) => a - b);
+            let best = years[0];
+            years.forEach(y => { if (y <= jahr) best = y; });
+            return TAX_PARAMS_BY_YEAR[best];
+        }
+        const TAX = taxParamsForYear(new Date().getFullYear());
+
         // Besteuerungsanteil der gesetzlichen Rente nach Renteneintritts­jahr
         function besteuerungsanteil(renteneintrittsjahr) {
             if (renteneintrittsjahr <= 2005) return 0.50;
@@ -1363,19 +1521,19 @@
             return 0.82 + (renteneintrittsjahr - 2022) * 0.005;
         }
 
-        // Einkommensteuer Grundtarif 2025 (§ 32a EStG)
-        function einkommensteuerGrund(zvE) {
-            if (zvE <= 12084) return 0;
-            if (zvE <= 17005) {
-                const y = (zvE - 12084) / 10000;
-                return (932.30 * y + 1400) * y;
+        // Einkommensteuer Grundtarif (§ 32a EStG, datengetrieben)
+        function einkommensteuerGrund(zvE, t = TAX.tarif) {
+            if (zvE <= t.grundfreibetrag) return 0;
+            if (zvE <= t.zone2Ende) {
+                const y = (zvE - t.grundfreibetrag) / 10000;
+                return (t.zone2.a * y + t.zone2.b) * y;
             }
-            if (zvE <= 66760) {
-                const z = (zvE - 17005) / 10000;
-                return (176.72 * z + 2397) * z + 1025.38;
+            if (zvE <= t.zone3Ende) {
+                const z = (zvE - t.zone2Ende) / 10000;
+                return (t.zone3.a * z + t.zone3.b) * z + t.zone3.c;
             }
-            if (zvE <= 277825) return 0.42 * zvE - 10636.31;
-            return 0.45 * zvE - 18971.06;
+            if (zvE <= t.zone4Ende) return t.zone4.satz * zvE - t.zone4.abzug;
+            return t.zone5.satz * zvE - t.zone5.abzug;
         }
 
         // Einkommensteuer mit optionalem Splittingverfahren
@@ -1387,32 +1545,23 @@
             return einkommensteuerGrund(zvE);
         }
 
-        // Solidaritätszuschlag (5,5 % der ESt, Freigrenze 18130 €)
-        function solidaritaetszuschlag(est) {
-            if (est <= 18130) return 0;
-            // Milderungszone: bis 33.507,56 € progressiver Anstieg
-            const soli = est * 0.055;
-            const milderung = (est - 18130) * 0.119;
-            return Math.min(soli, milderung);
+        // Solidaritätszuschlag (Freigrenze + Milderungszone)
+        function solidaritaetszuschlag(est, s = TAX.soli) {
+            if (est <= s.freigrenze) return 0;
+            return Math.min(est * s.satz, (est - s.freigrenze) * s.milderungssatz);
         }
 
         // KV-Beitrag Rentner: halber allgemeiner Satz + halber Zusatzbeitrag
-        const KV_ALLGEMEIN_HALB = 0.073;       // 7,3 %
-        const KV_ZUSATZ_HALB = 0.0085;          // ~0,85 % (Durchschnitt 2025)
-        const KV_RENTNER_SATZ = KV_ALLGEMEIN_HALB + KV_ZUSATZ_HALB; // ~8,15 %
+        const KV_RENTNER_SATZ = TAX.kvAllgemeinHalb + TAX.kvZusatzHalb; // ~8,15 %
 
-        // PV-Beitrag Rentner: abhängig von Kinderanzahl
-        // Kinderlos: 4,0 %; 1 Kind: 3,4 %; 2: 3,15 %; 3: 2,90 %; 4: 2,65 %; 5+: 2,40 %
-        // Abschlag für 2.–5. Kind gilt nur solange Kind < 25 J.
-        // Für Rentner vereinfacht: kinderlos vs. hat(te) Kinder (3,4 %)
+        // PV-Beitrag Rentner: vereinfacht kinderlos (4,0 %) vs. hat(te) Kinder (3,4 %)
         function pvRentnerSatz(anzahlKinder) {
-            if (anzahlKinder <= 0) return 0.04;    // kinderlos
-            return 0.034;                           // hat/hatte Kinder
+            return anzahlKinder <= 0 ? TAX.pvKinderlos : TAX.pvMitKind;
         }
 
         // Betriebsrente: voller KV-Satz (Arbeitgeber+Arbeitnehmer) oberhalb Freigrenze
-        const KV_BETRIEB_VOLL = 0.146 + 0.017;  // ~16,3 %
-        const BETRIEBSRENTE_FREIGRENZE_MONAT = 176.75; // 2024/2025
+        const KV_BETRIEB_VOLL = TAX.kvBetriebVoll;
+        const BETRIEBSRENTE_FREIGRENZE_MONAT = TAX.betriebsrenteFreigrenzeMonat;
 
         // ── Rentenlücke Berechnung ────────────────────────────────
 
@@ -1428,8 +1577,7 @@
             const sozialAbgaben = kvGesetzl + pvGesetzl + kvBetrieb + pvBetrieb;
             const steuerpflGesetzl = gesetzlJahr * bestAnteilFix;
             const steuerpflBetrieb = betriebsJahr;
-            const werbungskosten = 102;
-            const zvE = Math.max(0, steuerpflGesetzl + steuerpflBetrieb - werbungskosten);
+            const zvE = Math.max(0, steuerpflGesetzl + steuerpflBetrieb - TAX.werbungskostenPauschale);
             const est = einkommensteuer(zvE, istVerheiratet);
             const soli = solidaritaetszuschlag(est);
             const steuer = est + soli;
@@ -1448,6 +1596,8 @@
             const inflation = parseFloat(document.getElementById('rl2_inflation').value);
             const vermoegen = parseFloat(document.getElementById('rl2_vermoegen').value) || 0;
             const verzinsung = parseFloat(document.getElementById('rl2_verzinsung').value);
+            const verzinsungRuhestandRaw = parseFloat(document.getElementById('rl2_verzinsung_ruhestand').value);
+            const entnahmeSteuer = parseFloat(document.getElementById('rl2_entnahme_steuer').value) || 0;
             const entnahmezeitraum = parseInt(document.getElementById('rl2_entnahmezeitraum').value);
             const istVerheiratet = document.getElementById('rl2_verheiratet').value === 'verheiratet';
             const anzahlKinder = parseInt(document.getElementById('rl2_kinder').value) || 0;
@@ -1458,16 +1608,23 @@
             if (rentenalter <= alter) {
                 return null;
             }
-            return { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder };
+            // Optional fields fall back: drawdown return = accumulation return, withdrawal tax = 0.
+            const verzinsungRuhestand = isNaN(verzinsungRuhestandRaw) ? verzinsung : verzinsungRuhestandRaw;
+            return { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, wunschrenteNetto, inflation, vermoegen, verzinsung, verzinsungRuhestand, entnahmeSteuer, entnahmezeitraum, istVerheiratet, anzahlKinder };
         }
 
         function calculateRL2(inputs) {
             const { alter, rentenalter, gesetzlichBrutto, rentensteigerung, betriebsrenteBrutto, wunschrenteNetto, inflation, vermoegen, verzinsung, entnahmezeitraum, istVerheiratet, anzahlKinder } = inputs;
+            const verzinsungRuhestand = inputs.verzinsungRuhestand ?? verzinsung;
+            const entnahmeSteuer = inputs.entnahmeSteuer || 0;
             const aktuellesJahr = new Date().getFullYear();
             const jahresBisRente = rentenalter - alter;
             const renteneintrittsjahr = aktuellesJahr + jahresBisRente;
             const inflRate = inflation / 100;
-            const verzRate = verzinsung / 100;
+            const verzRate = verzinsung / 100;              // Ansparphase
+            const verzRenteRate = verzinsungRuhestand / 100; // Entnahmephase
+            // Gross-up: withdrawals carry an effective tax (e.g. Abgeltungsteuer on gains)
+            const bruttoFaktor = entnahmeSteuer > 0 && entnahmeSteuer < 100 ? 1 / (1 - entnahmeSteuer / 100) : 1;
             const steigRate = rentensteigerung / 100;
             const gesetzlichBeiRente = gesetzlichBrutto;
             const bestAnteil = besteuerungsanteil(renteneintrittsjahr);
@@ -1493,14 +1650,15 @@
                 const wunschNettoJ = wunschNettoBeiRente * Math.pow(1 + inflRate, j);
                 const nettoOhne = berechneNetto(gesetzlJ, betriebsrenteBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
                 const renteNettoJ = nettoOhne.nettoGesamt / 12;
-                const entnahmeJ = Math.max(0, wunschNettoJ - renteNettoJ);
+                // Withdrawal must cover the net gap plus the tax on the withdrawal itself
+                const entnahmeJ = Math.max(0, wunschNettoJ - renteNettoJ) * bruttoFaktor;
                 vermoegenVerlauf.push(Math.round(aktVermoegen * 100) / 100);
                 nettoBedarfVerlauf.push(Math.round(wunschNettoJ * 100) / 100);
                 nettoRenteVerlauf.push(Math.round(renteNettoJ * 100) / 100);
                 entnahmeVerlauf.push(Math.round(entnahmeJ * 100) / 100);
                 if (j < entnahmezeitraum) {
-                    benoetigtesKapital += entnahmeJ * 12 / Math.pow(1 + verzRate, j);
-                    aktVermoegen = aktVermoegen * (1 + verzRate) - entnahmeJ * 12;
+                    benoetigtesKapital += entnahmeJ * 12 / Math.pow(1 + verzRenteRate, j);
+                    aktVermoegen = aktVermoegen * (1 + verzRenteRate) - entnahmeJ * 12;
                 }
             }
 
@@ -1512,7 +1670,7 @@
                 monatlicheSparrate = monatsZins > 0 ? vermoegenslücke * monatsZins / (Math.pow(1 + monatsZins, monate) - 1) : vermoegenslücke / monate;
             }
 
-            return { jahresBisRente, renteneintrittsjahr, bestAnteil, vermoegenBeiRente, wunschNettoBeiRente, gesetzlichBeiRente, rentenNettoOhneEntnahme, benoetigteEntnahmeMonat1, benoetigtesKapital, vermoegenslücke, monatlicheSparrate, ohnEntnahme, pvSatz, labels, vermoegenVerlauf, nettoBedarfVerlauf, nettoRenteVerlauf, entnahmeVerlauf };
+            return { jahresBisRente, renteneintrittsjahr, bestAnteil, vermoegenBeiRente, wunschNettoBeiRente, gesetzlichBeiRente, rentenNettoOhneEntnahme, benoetigteEntnahmeMonat1, benoetigtesKapital, vermoegenslücke, monatlicheSparrate, ohnEntnahme, pvSatz, verzinsungRuhestand, entnahmeSteuer, labels, vermoegenVerlauf, nettoBedarfVerlauf, nettoRenteVerlauf, entnahmeVerlauf };
         }
 
         function renderRL2Results(results, inputs) {
@@ -1540,6 +1698,13 @@
                         <div style="font-size: 0.85rem; color: var(--text-secondary);">
                             PV-Satz: <strong style="color: var(--text-primary);">${(pvSatz * 100).toFixed(1)} %</strong> (${anzahlKinder > 0 ? anzahlKinder + (anzahlKinder === 1 ? ' Kind' : ' Kinder') : 'kinderlos'})
                         </div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                            Verzinsung: <strong style="color: var(--text-primary);">${verzinsung} %</strong> bis Rente / <strong style="color: var(--text-primary);">${results.verzinsungRuhestand} %</strong> im Ruhestand
+                        </div>
+                        ${results.entnahmeSteuer > 0 ? `
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                            Steuersatz auf Entnahmen: <strong style="color: var(--text-primary);">${results.entnahmeSteuer} %</strong>
+                        </div>` : ''}
                     </div>
 
                     <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
@@ -1624,6 +1789,7 @@
 
         // Coordinator
         function berechneRentenluecke2() {
+            applyAutoUebernahme();   // linked fields always calculate on fresh data
             const inputs = readRL2Inputs();
             if (!inputs) {
                 const alter = parseInt(document.getElementById('rl2_alter').value);

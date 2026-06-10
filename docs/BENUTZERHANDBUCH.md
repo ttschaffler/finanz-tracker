@@ -77,13 +77,19 @@ Oben werden auf Basis des **neuesten Eintrags** angezeigt:
 
 **„Export CSV"** lädt alle Einträge als Semikolon-getrennte CSV-Datei herunter (deutsches Zahlenformat mit Komma) – direkt in Excel/LibreOffice nutzbar.
 
-### Einstellungen (bAV)
+### Einstellungen (bAV & Rentenlücke)
 
-Unter **„⚙ Einstellungen"** legst du fest, welche Konten/Depots als **betriebliche Altersvorsorge** zählen. bAV-Konten:
+Unter **„⚙ Einstellungen"** gibt es zwei Zuordnungen:
+
+**Betriebliche Altersvorsorge (bAV) 🏢** – Konten/Depots, die als bAV zählen:
 
 - werden in der Übersichtskarte „Betriebliche Altersvorsorge" separat summiert,
 - tragen überall das 🏢-Symbol,
 - fließen im Rentenlücken-Rechner als **Betriebsrente** ein (statt als frei verfügbares Vermögen) – das vermeidet Doppelzählung.
+
+**Rentenlücke: Konten ausschließen 🚫** – Konten/Depots, die bei der Vermögens-Übernahme in den Rentenlücken-Rechner ignoriert werden sollen (z. B. Notgroschen oder zweckgebundenes Geld). Das übernommene Vermögen ist dann: **Gesamtvermögen − bAV − ausgeschlossene Konten**. Ist ein Konto gleichzeitig als bAV markiert, hat bAV Vorrang.
+
+Beide Zuordnungen werden in der Cloud gespeichert und gelten damit auf allen Geräten.
 
 ## Tab „Rentenlücke"
 
@@ -98,14 +104,18 @@ Der Rechner ermittelt, wie viel **netto** von deiner Rente übrig bleibt und wie
 | Anzahl Kinder | Beeinflusst den Pflegeversicherungssatz (kinderlos 4,0 %, sonst 3,4 %) |
 | Gesetzl. Rente brutto bei Eintritt | Erwartete monatliche Bruttorente laut Renteninformation |
 | Rentensteigerung im Ruhestand | Jährliche Anpassung der gesetzlichen Rente (z. B. 1,5 %) |
-| Betriebsrente brutto 🏢 | Monatliche Betriebsrente. **„Übernehmen"** verteilt dein aktuelles bAV-Vermögen gleichmäßig über den Entnahmezeitraum |
+| Betriebsrente brutto 🏢 | Monatliche Betriebsrente. **„Übernehmen"** verrentet dein aktuelles bAV-Vermögen über den Entnahmezeitraum (mit Verzinsung im Ruhestand, sofern angegeben) |
 | Gewünschte Netto-Monatsrente | Dein Wunsch-Nettoeinkommen im Ruhestand in **heutiger Kaufkraft** (wird automatisch mit der Inflation hochgerechnet) |
 | Jährliche Inflation | Annahme für die Kaufkraftanpassung (z. B. 2,5 %) |
-| Bestehendes Vermögen (ohne bAV) | Heutiges Kapital. **„Übernehmen"** holt das Gesamtvermögen abzüglich bAV aus der Vermögensübersicht |
-| Verzinsung Vermögen | Erwartete Rendite p.a. – gilt für Ansparphase **und** Entnahmephase |
+| Bestehendes Vermögen (ohne bAV) | Heutiges Kapital. **„Übernehmen"** holt das Gesamtvermögen abzüglich bAV und abzüglich der in den Einstellungen ausgeschlossenen Konten |
+| Verzinsung bis Rente | Erwartete Rendite p.a. in der Ansparphase |
+| Verzinsung im Ruhestand | Optional: Rendite in der Entnahmephase (z. B. niedriger durch Umschichtung in sicherere Anlagen). Leer = wie bis Rente |
+| Steuersatz auf Entnahmen | Optional: effektiver Steuersatz auf Depot-Entnahmen (z. B. Abgeltungsteuer auf den Gewinnanteil). Die Entnahme wird entsprechend „brutto" hochgerechnet. 0 = steuerfrei |
 | Entnahmezeitraum | Wie viele Jahre das Kapital reichen soll |
 
-Alle Eingaben werden lokal im Browser gespeichert und beim nächsten Besuch wieder vorbelegt. Beim Wechsel auf den Tab wird die Betriebsrente automatisch aus dem bAV-Vermögen vorbefüllt, sofern das Feld noch leer ist (manuelle Eingaben werden nie überschrieben).
+**Automatische Übernahme**: Mit der Checkbox „Vermögen & Betriebsrente automatisch aus der Vermögensübersicht übernehmen" werden beide Felder live mit dem jeweils neuesten Eintrag verknüpft – sie aktualisieren sich bei jedem Tab-Wechsel, bei neuen Einträgen und vor jeder Berechnung. Verknüpfte Felder sind schreibgeschützt; zum manuellen Eingeben einfach die Checkbox deaktivieren.
+
+Alle Eingaben werden lokal **und** in der Cloud gespeichert und beim nächsten Besuch (auch auf anderen Geräten) wieder vorbelegt. Beim Wechsel auf den Tab wird die Betriebsrente automatisch aus dem bAV-Vermögen vorbefüllt, sofern das Feld noch leer ist (manuelle Eingaben werden nie überschrieben).
 
 ### Was wird berechnet?
 
@@ -113,9 +123,9 @@ Alle Eingaben werden lokal im Browser gespeichert und beim nächsten Besuch wied
 2. **Sozialabgaben**: Kranken- (≈ 8,15 %) und Pflegeversicherung auf die gesetzliche Rente; auf die Betriebsrente voller KV-Satz (≈ 16,3 %) oberhalb der Freigrenze (176,75 €/Monat) plus PV.
 3. **Einkommensteuer** nach Grundtarif 2025 (§ 32a EStG) bzw. Splittingtarif, plus Solidaritätszuschlag (mit Freigrenze und Milderungszone).
 4. **Monatliche Rentenlücke (netto)**: Wunschrente (inflationsbereinigt auf den Renteneintritt) minus Netto-Rente.
-5. **Benötigtes Kapital**: Barwert aller monatlichen Entnahmen über den Entnahmezeitraum, wobei die Lücke jedes Jahr neu berechnet wird (Rente steigt mit der Rentensteigerung, Bedarf mit der Inflation).
-6. **Vermögenslücke**: Benötigtes Kapital minus dein auf den Renteneintritt hochgerechnetes Vermögen.
-7. **Benötigte monatliche Sparrate**: Welche Sparrate (bei angegebener Verzinsung) die Vermögenslücke bis zum Renteneintritt schließt.
+5. **Benötigtes Kapital**: Barwert aller monatlichen Entnahmen über den Entnahmezeitraum (diskontiert mit der Ruhestand-Verzinsung), wobei die Lücke jedes Jahr neu berechnet wird (Rente steigt mit der Rentensteigerung, Bedarf mit der Inflation). Ist ein Steuersatz auf Entnahmen angegeben, wird die Entnahme entsprechend hochgerechnet.
+6. **Vermögenslücke**: Benötigtes Kapital minus dein auf den Renteneintritt hochgerechnetes Vermögen (Ansparphasen-Verzinsung).
+7. **Benötigte monatliche Sparrate**: Welche Sparrate (bei der Verzinsung bis Rente) die Vermögenslücke bis zum Renteneintritt schließt.
 
 ### Ergebnis-Diagramm
 
@@ -133,16 +143,17 @@ Einzelne Linien lassen sich per Checkbox ausblenden.
 | Daten | Speicherort |
 |---|---|
 | Vermögenseinträge | Firebase Firestore (Cloud), pro Nutzer getrennt |
-| Diagramm-Einstellungen, bAV-Zuordnung, Rentenlücken-Eingaben | `localStorage` des Browsers (nur lokal, **nicht** geräteübergreifend) |
+| bAV-Zuordnung, ausgeschlossene Konten, Rentenlücken-Eingaben | Firestore (Cloud, geräteübergreifend) mit `localStorage` als lokalem Cache/Offline-Fallback; beim Login gewinnt die Cloud-Version |
+| Diagramm-Einstellungen (Checkboxen, Zeitraum) | `localStorage` des Browsers (nur lokal) |
 
 Die Anmeldung erfolgt per Google OAuth; ein Passwort wird in der App nicht gespeichert. Die im Quellcode sichtbaren Firebase-Schlüssel sind clientseitige Identifikatoren, keine Geheimnisse.
 
 ## Annahmen & Grenzen
 
-- **Steuer-/Abgabenwerte gelten für 2025** (Grundfreibetrag 12.084 €, KV-Zusatzbeitrag ≈ 0,85 %, bAV-Freigrenze 176,75 €/Monat). Künftige Rechtsänderungen sind nicht berücksichtigt.
+- **Steuer-/Abgabenwerte gelten für 2025** (Grundfreibetrag 12.084 €, KV-Zusatzbeitrag ≈ 0,85 %, bAV-Freigrenze 176,75 €/Monat). Die Parameter sind intern pro Jahr hinterlegt (`TAX_PARAMS_BY_YEAR`) und können bei Rechtsänderungen ergänzt werden; bis dahin gilt der jeweils jüngste bekannte Stand.
 - Die MSCI-World-Vergleichslinie nimmt pauschal **8 % p.a.** an, die Kaufkraftlinie **2,5 % Inflation**.
-- Entnahmen aus dem Vermögen werden **netto** behandelt – Kapitalertragsteuer (Abgeltungsteuer) auf Kursgewinne ist **nicht** modelliert.
-- Die Betriebsrente bleibt im Ruhestand konstant (keine Anpassung) und die bAV-Übernahme verteilt das Kapital linear ohne Verzinsung.
+- Kapitalertragsteuer auf Entnahmen wird nur berücksichtigt, wenn du einen **Steuersatz auf Entnahmen** angibst (vereinfachter Effektivsatz, keine Berechnung des tatsächlichen Gewinnanteils).
+- Die Betriebsrente bleibt im Ruhestand konstant (keine Anpassung); die bAV-Übernahme verrentet das Kapital mit der Ruhestand-Verzinsung (ohne Angabe: linear).
 - Pflegeversicherung vereinfacht: kinderlos vs. mit Kind(ern); Kinderzahl-Staffel für Kinder unter 25 wird nicht abgebildet.
 - Alle Berechnungen sind Modellrechnungen und ersetzen keine Steuer- oder Rentenberatung.
 

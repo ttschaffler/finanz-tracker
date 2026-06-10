@@ -2,6 +2,24 @@
 
 Ziel: den Rentenlücken-Rechner zu einem **generischen Werkzeug** ausbauen, das beliebige Vorsorge-Situationen abbildet und Daten nahtlos aus der Vermögensübersicht übernimmt.
 
+## Umsetzungsstand
+
+| Vorschlag | Status |
+|---|---|
+| A1 Konfigurierbare Konto-Zuordnung | ✅ umgesetzt (Einstellungen → „Rentenlücke: Konten ausschließen") |
+| A2 Live-Verknüpfung | ✅ umgesetzt (Checkbox „automatisch übernehmen", Felder schreibgeschützt) |
+| A3 Verzinsung aus Historie vorschlagen | ⬜ offen |
+| A4 Sparrate mit Ist-Daten abgleichen | ⬜ offen |
+| B1 Steuerparameter als Jahres-Tabelle | ✅ umgesetzt (`TAX_PARAMS_BY_YEAR` + `taxParamsForYear`) |
+| B2 Generische Einkommensquellen | ⬜ offen |
+| B3 Entnahme-Besteuerung | ✅ umgesetzt (vereinfachter Effektivsatz „Steuersatz auf Entnahmen") |
+| B4 KV-Status konfigurierbar | ⬜ offen |
+| B5 Getrennte Renditen Anspar-/Entnahmephase | ✅ umgesetzt („Verzinsung im Ruhestand") |
+| B6 bAV-Annuitisierung mit Verzinsung | ✅ umgesetzt (Annuitätenformel, Fallback linear) |
+| B7 Szenarien & Sensitivität | ⬜ offen |
+| C1 Firestore- statt localStorage-Persistenz | ✅ umgesetzt (`RemoteSettings`, localStorage als Offline-Cache) |
+| C2–C5 (Auto-Berechnung, Export, Profile, Inline-Validierung) | ⬜ offen |
+
 ## Ist-Zustand (Kurzanalyse)
 
 Der Rechner ist fachlich bereits solide: Besteuerungsanteil nach Eintrittsjahr, Einkommensteuer-Grundtarif 2025 inkl. Splitting, Soli mit Milderungszone, KV/PV-Sätze für Rentner, Betriebsrenten-Freigrenze, jahresgenaue Projektion mit Rentensteigerung und Inflation. Die Übernahme aus der Vermögensübersicht existiert punktuell (zwei „Übernehmen"-Buttons: Gesamtvermögen ohne bAV, bAV → Betriebsrente).
