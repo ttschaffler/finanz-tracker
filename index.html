@@ -639,12 +639,18 @@
         // ── DataStore (DIP: wraps Firebase) ──────────────────────
         const DataStore = {
             collection: null,
+            _unsubscribe: null,
             init(col) { this.collection = col; },
             listen(onData, onError) {
-                return this.collection.orderBy('date', 'desc').onSnapshot(
+                this.stopListening();
+                this._unsubscribe = this.collection.orderBy('date', 'desc').onSnapshot(
                     snapshot => onData(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
                     error => onError(error)
                 );
+                return this._unsubscribe;
+            },
+            stopListening() {
+                if (this._unsubscribe) { this._unsubscribe(); this._unsubscribe = null; }
             },
             async add(data) { return this.collection.add(data); },
             async update(id, data) { return this.collection.doc(id).update(data); },
@@ -689,6 +695,7 @@
                 initFirebase();
             } else {
                 AppState.currentUser = null;
+                DataStore.stopListening();
                 DataStore.collection = null;
                 AppState.entries = [];
                 document.getElementById('loginScreen').style.display  = 'flex';
@@ -783,12 +790,13 @@
 
         // ── Pure Business Logic ───────────────────────────────────────
         function calculateTotals(entry) {
+            const bavIds = new Set(Settings.getBavAccountIds());
             let konten = 0, depots = 0, bav = 0;
             accounts.forEach(acc => {
                 const v = entry[acc.id] || 0;
                 if (acc.type === 'konto') konten += v;
                 else depots += v;
-                if (isBav(acc.id)) bav += v;   // bAV is orthogonal to konto/depot
+                if (bavIds.has(acc.id)) bav += v;   // bAV is orthogonal to konto/depot
             });
             return { total: konten + depots, konten, depots, bav };
         }
@@ -1008,7 +1016,7 @@
         }
 
         // OCP: bank datasets derived from BANKS registry
-        function buildBankDatasets(sorted, forecastCount, ctx, forecastSeg) {
+        function buildBankDatasets(sorted, forecastCount, ctx) {
             const checked = id => { const el = document.getElementById(id); return el && el.checked; };
             const nf = n => Array(n).fill(null);
             const datasets = [];
@@ -1116,9 +1124,12 @@
             const labels = allDates.map(d => Formatter.date(d));
             const forecastSeg = { borderDash: c => c.p0DataIndex >= historicalLength - 1 ? [8, 4] : [] };
 
+            // Totals once per entry (calculateTotals iterates all accounts)
+            const totals = sorted.map(e => calculateTotals(e));
+
             // Benchmark values
             const baseDate = sorted[0].date;
-            const baseTotal = calculateTotals(sorted[0]).total;
+            const baseTotal = totals[0].total;
             const msciValues = allDates.map(d => Math.round(baseTotal * Math.pow(1.08, yearsBetween(baseDate, d)) * 100) / 100);
             const inflValues = allDates.map(d => Math.round(baseTotal * Math.pow(1.025, yearsBetween(baseDate, d)) * 100) / 100);
 
@@ -1126,18 +1137,18 @@
             const datasets = [];
             if (checked('showTotal'))
                 datasets.push(makeChartLine('Gesamtvermögen',
-                    [...sorted.map(e => calculateTotals(e).total), ...nf(forecastCount)],
+                    [...totals.map(t => t.total), ...nf(forecastCount)],
                     '#d4af37', ctx, { fill: [212, 175, 55], width: 3, pointRadius: 6 }));
             if (checked('showKonten'))
                 datasets.push(makeChartLine('Konten',
-                    [...sorted.map(e => calculateTotals(e).konten), ...nf(forecastCount)],
+                    [...totals.map(t => t.konten), ...nf(forecastCount)],
                     '#2dd4bf', ctx, { fill: [45, 212, 191], pointRadius: 4 }));
             if (checked('showDepots'))
                 datasets.push(makeChartLine('Depots',
-                    [...sorted.map(e => calculateTotals(e).depots), ...nf(forecastCount)],
+                    [...totals.map(t => t.depots), ...nf(forecastCount)],
                     '#f87171', ctx, { fill: [248, 113, 113], pointRadius: 4 }));
 
-            datasets.push(...buildBankDatasets(sorted, forecastCount, ctx, forecastSeg));
+            datasets.push(...buildBankDatasets(sorted, forecastCount, ctx));
 
             if (checked('showMSCI'))
                 datasets.push(makeChartLine('MSCI World (8% p.a.)', msciValues, '#f97316',
@@ -1474,6 +1485,7 @@
             const nettoRenteVerlauf = [];
             const entnahmeVerlauf = [];
             let aktVermoegen = vermoegenBeiRente;
+            let benoetigtesKapital = 0;
 
             for (let j = 0; j <= entnahmezeitraum; j++) {
                 labels.push(`${rentenalter + j} (${renteneintrittsjahr + j})`);
@@ -1487,17 +1499,9 @@
                 nettoRenteVerlauf.push(Math.round(renteNettoJ * 100) / 100);
                 entnahmeVerlauf.push(Math.round(entnahmeJ * 100) / 100);
                 if (j < entnahmezeitraum) {
+                    benoetigtesKapital += entnahmeJ * 12 / Math.pow(1 + verzRate, j);
                     aktVermoegen = aktVermoegen * (1 + verzRate) - entnahmeJ * 12;
                 }
-            }
-
-            let benoetigtesKapital = 0;
-            for (let j = 0; j < entnahmezeitraum; j++) {
-                const gesetzlJ = gesetzlichBeiRente * Math.pow(1 + steigRate, j);
-                const wunschNettoJ = wunschNettoBeiRente * Math.pow(1 + inflRate, j);
-                const nettoOhne = berechneNetto(gesetzlJ, betriebsrenteBrutto, 0, bestAnteil, istVerheiratet, pvSatz);
-                const entnahmeJ = Math.max(0, wunschNettoJ - nettoOhne.nettoGesamt / 12) * 12;
-                benoetigtesKapital += entnahmeJ / Math.pow(1 + verzRate, j);
             }
 
             const vermoegenslücke = Math.max(0, benoetigtesKapital - vermoegenBeiRente);
@@ -1622,12 +1626,11 @@
         function berechneRentenluecke2() {
             const inputs = readRL2Inputs();
             if (!inputs) {
-                if (!inputs && document.getElementById('rl2_alter').value && document.getElementById('rl2_rentenalter').value) {
-                    const alter = parseInt(document.getElementById('rl2_alter').value);
-                    const rentenalter = parseInt(document.getElementById('rl2_rentenalter').value);
-                    if (rentenalter <= alter) { alert('Renteneintrittsalter muss größer als das aktuelle Alter sein'); return; }
-                }
-                alert('Bitte alle Pflichtfelder ausfüllen');
+                const alter = parseInt(document.getElementById('rl2_alter').value);
+                const rentenalter = parseInt(document.getElementById('rl2_rentenalter').value);
+                alert(alter && rentenalter && rentenalter <= alter
+                    ? 'Renteneintrittsalter muss größer als das aktuelle Alter sein'
+                    : 'Bitte alle Pflichtfelder ausfüllen');
                 return;
             }
             saveRL2Data();

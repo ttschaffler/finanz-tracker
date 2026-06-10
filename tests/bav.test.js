@@ -1,84 +1,20 @@
 // Automated tests for the company pension (bAV) feature.
 //
-// The app is a single static index.html with no build system. To test the real
-// shipping code (not a duplicated copy), we load the entire inline <script> into
-// an isolated VM context with lightweight stubs for the browser/Firebase globals
-// it touches at load time. We then exercise the pure logic: the Settings store,
-// the effective `isBav` resolver, `calculateTotals` (now incl. bAV), and the
+// Exercises the pure logic via the shared VM harness (tests/harness.js)
+// against the real shipping code in index.html: the Settings store, the
+// effective `isBav` resolver, `calculateTotals` (incl. bAV), and the
 // `annuitizeMonthly` conversion used to feed the Rentenlücke Betriebsrente.
 
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
 const assert = require('assert');
+const { loadApp, createRunner } = require('./harness');
 
-const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-
-// ── Pull the inline app script (the only <script> with no attributes) ──────
-const startTag = '<script>';
-const sIdx = html.indexOf(startTag);
-const eIdx = html.indexOf('</script>', sIdx);
-assert.ok(sIdx !== -1 && eIdx !== -1, 'Could not locate the inline <script> block');
-const scriptSrc = html.slice(sIdx + startTag.length, eIdx);
-
-// ── Minimal browser / Firebase stubs the script needs at load time ─────────
-function fakeElement() {
-    return {
-        value: '', textContent: '', innerHTML: '', className: '', checked: false,
-        style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {} },
-        addEventListener() {}, querySelectorAll() { return []; }
-    };
-}
-
-const store = new Map();
-const localStorage = {
-    getItem: k => (store.has(k) ? store.get(k) : null),
-    setItem: (k, v) => store.set(k, String(v)),
-    removeItem: k => store.delete(k),
-    clear: () => store.clear()
-};
-
-const chainable = new Proxy(function () {}, {
-    get: () => chainable,
-    apply: () => chainable
-});
-const firebase = {
-    initializeApp() {},
-    firestore: Object.assign(() => chainable, { FieldValue: chainable }),
-    auth: Object.assign(() => ({ onAuthStateChanged() {}, signOut() {}, signInWithPopup() { return { catch() {} }; } }),
-        { GoogleAuthProvider: function () {} })
-};
-
-const sandbox = {
-    firebase, localStorage, console,
-    Intl, Date, Math, JSON, parseFloat, parseInt, isFinite, Array, Object, Number, String,
-    alert() {}, confirm() { return true; },
-    Chart: function () {},
-    document: {
-        addEventListener() {},
-        getElementById: () => fakeElement(),
-        querySelector: () => fakeElement(),
-        querySelectorAll: () => []
-    },
-    window: {}
-};
-sandbox.window = sandbox;
-sandbox.globalThis = sandbox;
-
-vm.createContext(sandbox);
-// `const`/`function` at top level don't attach to the context, so re-export the
-// symbols we want to test (the appended code shares the script's scope).
-const exportLine = '\nObject.assign(globalThis, { accounts, BANKS, Settings, isBav, calculateTotals, annuitizeMonthly, bavIndicator });';
-vm.runInContext(scriptSrc + exportLine, sandbox);
-
-const { accounts, Settings, isBav, calculateTotals, annuitizeMonthly, bavIndicator } = sandbox;
+const { sandbox, store } = loadApp(['accounts', 'BANKS', 'Settings', 'isBav', 'calculateTotals', 'annuitizeMonthly', 'bavIndicator']);
+const { Settings, isBav, calculateTotals, annuitizeMonthly, bavIndicator } = sandbox;
 
 // Reset persisted settings + cache between tests for isolation.
 function reset() { store.clear(); Settings._data = null; }
 
-// ── Tests ───────────────────────────────────────────────────────────────
-const tests = [];
-const test = (name, fn) => tests.push([name, fn]);
+const { test, run } = createRunner();
 
 test('default bAV designation comes from the registry (adidas Konto)', () => {
     reset();
@@ -142,11 +78,4 @@ test('bavIndicator renders icon + German tooltip only for bAV accounts', () => {
     assert.strictEqual(bavIndicator(false), '');
 });
 
-// ── Runner ────────────────────────────────────────────────────────────────
-let failed = 0;
-tests.forEach(([name, fn]) => {
-    try { fn(); console.log(`  ✓ ${name}`); }
-    catch (err) { failed++; console.error(`  ✗ ${name}\n      ${err.message}`); }
-});
-console.log(`\n${tests.length - failed}/${tests.length} tests passed`);
-process.exit(failed === 0 ? 0 : 1);
+run();
